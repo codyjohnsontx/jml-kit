@@ -1,0 +1,4 @@
+company: pedalworks
+people:
+  - {id: ana.ruiz, name: Ana Ruiz, email: ana.ruiz@pedalworks.example, team: engineering, status: active}
+  - {id: sam.okafor, name: Sam Okafor, email: sam.okafor@pedalworks.example, team: design, status: leaver, end: 2026-09-01}

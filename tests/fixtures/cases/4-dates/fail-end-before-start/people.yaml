@@ -1,0 +1,9 @@
+company: pedalworks
+people:
+  - id: sam.okafor
+    name: Sam Okafor
+    email: sam.okafor@pedalworks.example
+    team: design
+    status: leaver
+    start: 2026-11-15
+    end: 2026-11-14

@@ -8,6 +8,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - The checks CI runs are the steps in `.github/workflows/validate.yml`; run the same `uv run ...` commands locally before pushing.
 - `validate.yml` must stay secret-free with `permissions: contents: read`, because it is the only workflow fork PRs run. Anything needing Okta or GitHub credentials goes in a separate workflow.
 - The CLI uses stdlib `argparse`. Propose any new dependency before adding it.
+- `jml validate` (`src/jml/validate.py`, models in `src/jml/models.py`) owns the people-file rules listed in its module docstring. Each rule has a passing and a failing fixture under `tests/fixtures/cases/<rule>/`; a case holds only the files that differ from `tests/fixtures/base/`. A new rule needs both.
+- Sample data is fictional. Only `codyjohnsontx` and `pedalworks-bot` may appear as `github` handles; everyone else is Okta only (a test enforces this).
 
 ## Maintaining this file
 

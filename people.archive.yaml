@@ -1,0 +1,4 @@
+# people.archive.yaml - everyone who has been deactivated, kept so nobody vanishes from the
+# audit trail. Written by `jml apply`; do not edit by hand. A person's block can leave
+# people.yaml only once their id is listed here.
+archived: []

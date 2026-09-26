@@ -1,0 +1,19 @@
+# Every optional key, with comments.
+company: pedalworks
+seats: {limit: 10, reserved: 1}
+people:
+  - id: ana.ruiz
+    name: Ana Ruiz
+    email: ana.ruiz@pedalworks.example
+    team: engineering
+    status: active
+    start: 2026-10-01
+    github: codyjohnsontx
+    extra_groups: [oncall]
+  - id: sam.okafor
+    name: Sam Okafor
+    email: sam.okafor@pedalworks.example
+    team: design
+    status: leaver
+    start: 2024-09-02
+    end: 2026-11-15

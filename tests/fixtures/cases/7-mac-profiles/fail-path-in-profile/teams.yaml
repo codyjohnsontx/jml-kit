@@ -1,0 +1,8 @@
+groups: [all-staff, engineering, design]
+teams:
+  engineering:
+    okta_groups: [all-staff, engineering]
+    mac_profile: engineering
+  design:
+    okta_groups: [all-staff, design]
+    mac_profile: ../../design

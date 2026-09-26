@@ -1,0 +1,12 @@
+company: pedalworks
+people:
+  - id: ana.ruiz
+    name: Someone
+    email: ana.ruiz@pedalworks.example
+    team: engineering
+    status: active
+  - id: ana.r
+    name: Someone
+    email: Ana.Ruiz@Pedalworks.example
+    team: engineering
+    status: active
