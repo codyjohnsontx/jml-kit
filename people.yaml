@@ -9,8 +9,8 @@
 # else is Okta only, because each real person may hold just one free GitHub account.
 company: pedalworks
 
+# Okta's Integrator Free Plan allows 10 active users; jml validate enforces that limit.
 seats:
-  limit: 10     # active users on Okta's Integrator Free Plan
   reserved: 1   # the owner's super admin user, which this file does not manage
 
 people:

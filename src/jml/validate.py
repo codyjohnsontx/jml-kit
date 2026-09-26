@@ -3,10 +3,11 @@
 Validation needs no credentials. It checks, in order:
 
 1. Each file parses as YAML, with no duplicate or unknown keys.
-2. Ids, emails and GitHub usernames are well formed and unique.
+2. Ids, emails and GitHub usernames are well formed and unique, emails are on the
+   company domain, and no active person reuses an archived id.
 3. Every team exists, and every Okta group is declared in teams.yaml.
 4. Leavers have an end date, active people do not, and end is not before start.
-5. Active people fit in the Okta seat limit minus the reserved seats.
+5. Active people fit in Okta's 10-user free plan limit minus the reserved seats.
 6. Anyone removed from people.yaml since the base revision is in people.archive.yaml.
 7. Every team's mac_profile has a mac/profiles/<name>.Brewfile.
 """
@@ -26,6 +27,7 @@ PEOPLE_FILE = "people.yaml"
 TEAMS_FILE = "teams.yaml"
 ARCHIVE_FILE = "people.archive.yaml"
 PROFILES_DIR = Path("mac") / "profiles"
+OKTA_SEAT_LIMIT = 10
 
 
 class _Loader(yaml.SafeLoader):
@@ -87,10 +89,8 @@ def _describe_yaml_error(exc: yaml.YAMLError) -> str:
     return f"{problem} (line {mark.line + 1}, column {mark.column + 1})"
 
 
-def _load[M: BaseModel](path: Path, model: type[M], *, missing_ok: bool = False) -> M:
+def _load[M: BaseModel](path: Path, model: type[M]) -> M:
     if not path.is_file():
-        if missing_ok:
-            return model()
         raise InvalidFile([f"{path.name}: file not found"])
     data = parse_yaml(path.read_text(encoding="utf-8"), path.name)
     if data is None:
@@ -171,13 +171,13 @@ def validate(root: Path, base_ids: set[str] | None = None) -> Result:
     """
     errors: list[str] = []
     loaded: dict[str, Any] = {}
-    for name, model, missing_ok in (
-        (PEOPLE_FILE, PeopleFile, False),
-        (TEAMS_FILE, TeamsFile, False),
-        (ARCHIVE_FILE, ArchiveFile, True),
+    for name, model in (
+        (PEOPLE_FILE, PeopleFile),
+        (TEAMS_FILE, TeamsFile),
+        (ARCHIVE_FILE, ArchiveFile),
     ):
         try:
-            loaded[name] = _load(root / name, model, missing_ok=missing_ok)
+            loaded[name] = _load(root / name, model)
         except InvalidFile as exc:
             errors.extend(exc.errors)
     if errors:
@@ -188,6 +188,8 @@ def validate(root: Path, base_ids: set[str] | None = None) -> Result:
     archive: ArchiveFile = loaded[ARCHIVE_FILE]
 
     errors += _check_unique(people)
+    errors += _check_email_domain(people)
+    errors += _check_ids_not_reused(people, archive)
     errors += _check_references(people, teams)
     errors += _check_seats(people)
     if base_ids is not None:
@@ -218,6 +220,25 @@ def _check_unique(people: PeopleFile) -> list[str]:
     return errors
 
 
+def _check_email_domain(people: PeopleFile) -> list[str]:
+    domain = f"{people.company}.example".lower()
+    return [
+        f"{PEOPLE_FILE}: {person.id}: email {person.email!r} is not on the company domain "
+        f"{domain}"
+        for person in people.people
+        if person.email.rsplit("@", 1)[1].lower() != domain
+    ]
+
+
+def _check_ids_not_reused(people: PeopleFile, archive: ArchiveFile) -> list[str]:
+    archived = {entry.id for entry in archive.archived}
+    return [
+        f"{PEOPLE_FILE}: id {person.id!r} is archived in {ARCHIVE_FILE} and cannot be reused"
+        for person in people.people
+        if person.status == "active" and person.id in archived
+    ]
+
+
 def _check_references(people: PeopleFile, teams: TeamsFile) -> list[str]:
     errors = []
     declared = set(teams.groups)
@@ -244,13 +265,13 @@ def _check_references(people: PeopleFile, teams: TeamsFile) -> list[str]:
 
 
 def _check_seats(people: PeopleFile) -> list[str]:
-    available = people.seats.limit - people.seats.reserved
+    available = OKTA_SEAT_LIMIT - people.seats.reserved
     active = sum(1 for person in people.people if person.status == "active")
     if active <= available:
         return []
     return [
         f"{PEOPLE_FILE}: {active} active people, but only {available} Okta seats are available "
-        f"({people.seats.limit} limit minus {people.seats.reserved} reserved)"
+        f"({OKTA_SEAT_LIMIT} limit minus {people.seats.reserved} reserved)"
     ]
 
 

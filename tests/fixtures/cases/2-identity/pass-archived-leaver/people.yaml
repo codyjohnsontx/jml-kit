@@ -1,6 +1,5 @@
-# Every optional key, with comments.
+# apply archives a leaver before their block is removed from people.yaml.
 company: pedalworks
-seats: {reserved: 1}
 people:
   - id: ana.ruiz
     name: Ana Ruiz
@@ -8,8 +7,6 @@ people:
     team: engineering
     status: active
     start: 2026-10-01
-    github: codyjohnsontx
-    extra_groups: [oncall]
   - id: sam.okafor
     name: Sam Okafor
     email: sam.okafor@pedalworks.example
