@@ -12,6 +12,18 @@ The demo uses a fictional company.
 
 Work in progress.
 
+## Development
+
+Requires [uv](https://docs.astral.sh/uv/) at the exact version pinned by `required-version` in [pyproject.toml](pyproject.toml).
+
+```sh
+uv sync
+uv run jml --help
+uv run pytest
+uv run ruff check
+uv run ruff format --check
+```
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
