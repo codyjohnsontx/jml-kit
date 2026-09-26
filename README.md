@@ -32,7 +32,7 @@ Only two people have a GitHub username: the owner's own account and one machine 
 6. Anyone removed from `people.yaml` since the base commit is in `people.archive.yaml` (`jml validate --base <rev>`), so nobody vanishes from the audit trail.
 7. Every team's Mac profile has a `mac/profiles/<name>.Brewfile`.
 
-Every problem is reported at once, as `file:line: message`, naming the person or team it concerns.
+Every problem is reported at once, as `file:line: message` (or `file: message` when there is no single line to change, such as a removed person), naming the person or team it concerns.
 
 ## Development
 
