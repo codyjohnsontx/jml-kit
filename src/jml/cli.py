@@ -172,7 +172,8 @@ def run_plan(args: argparse.Namespace, today: date) -> int:
         base = read_base_files(root, args.base, files)
         if base is None:
             print(
-                f"jml plan: the files at {args.base} are not valid, so drift is not shown apart",
+                f"jml plan: the files at {args.base} are not valid, so changes already "
+                "needed before this change are not shown apart",
                 file=sys.stderr,
             )
     if not args.fake:

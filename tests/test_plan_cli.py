@@ -112,7 +112,7 @@ def test_plan_with_an_invalid_base_does_not_show_drift_apart(repo, capsys, name,
     assert code == 0
     assert "are not valid" in err
     assert "### Already needed" not in out
-    assert "run with `--base` to show it apart" in out
+    assert "run with `--base` to show them apart" in out
 
 
 def test_plan_exits_1_when_refused(repo, capsys, monkeypatch):
