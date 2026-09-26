@@ -68,6 +68,7 @@ class Result:
     errors: list[str]
     people: PeopleFile | None = None
     teams: TeamsFile | None = None
+    archive: ArchiveFile | None = None
 
     @property
     def ok(self) -> bool:
@@ -92,13 +93,18 @@ def _describe_yaml_error(exc: yaml.YAMLError) -> str:
 def _load[M: BaseModel](path: Path, model: type[M]) -> M:
     if not path.is_file():
         raise InvalidFile([f"{path.name}: file not found"])
-    data = parse_yaml(path.read_text(encoding="utf-8"), path.name)
+    return load_text(path.read_text(encoding="utf-8"), path.name, model)
+
+
+def load_text[M: BaseModel](text: str, name: str, model: type[M]) -> M:
+    """Parse one file's text into its model, raising InvalidFile with every problem."""
+    data = parse_yaml(text, name)
     if data is None:
-        raise InvalidFile([f"{path.name}: file is empty"])
+        raise InvalidFile([f"{name}: file is empty"])
     try:
         return model.model_validate(data)
     except PydanticValidationError as exc:
-        raise InvalidFile(_describe_model_errors(exc, path.name, data)) from exc
+        raise InvalidFile(_describe_model_errors(exc, name, data)) from exc
 
 
 def _describe_model_errors(exc: PydanticValidationError, name: str, data: Any) -> list[str]:
@@ -134,21 +140,27 @@ def _describe_location(loc: tuple[int | str, ...], data: Any) -> str:
     return "".join(parts)
 
 
-def read_base_people_ids(root: Path, base: str) -> set[str]:
-    """Return the person ids in people.yaml at git revision `base` (empty if it had none)."""
+def read_at_revision(root: Path, base: str, name: str) -> str | None:
+    """Return file `name` under `root` at git revision `base`, or None if it had none."""
 
     def git(*args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
 
     if git("rev-parse", "--verify", "--quiet", f"{base}^{{commit}}").returncode != 0:
         raise BaseRevisionError(f"base revision {base!r} is not a commit in this repository")
-    spec = f"{base}:./{PEOPLE_FILE}"
+    spec = f"{base}:./{name}"
     if git("cat-file", "-e", spec).returncode != 0:
-        return set()
+        return None
     shown = git("show", spec)
     if shown.returncode != 0:
         raise BaseRevisionError(f"cannot read {spec}: {shown.stderr.strip()}")
-    return people_ids(shown.stdout)
+    return shown.stdout
+
+
+def read_base_people_ids(root: Path, base: str) -> set[str]:
+    """Return the person ids in people.yaml at git revision `base` (empty if it had none)."""
+    text = read_at_revision(root, base, PEOPLE_FILE)
+    return people_ids(text) if text is not None else set()
 
 
 def people_ids(text: str) -> set[str]:
@@ -195,7 +207,7 @@ def validate(root: Path, base_ids: set[str] | None = None) -> Result:
     if base_ids is not None:
         errors += _check_history(people, archive, base_ids)
     errors += _check_profiles(root, teams)
-    return Result(errors, people, teams)
+    return Result(errors, people, teams, archive)
 
 
 def _check_unique(people: PeopleFile) -> list[str]:

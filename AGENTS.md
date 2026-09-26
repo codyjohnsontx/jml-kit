@@ -8,6 +8,8 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - `validate.yml` must stay secret-free with `permissions: contents: read`, because it is the only workflow fork PRs run. Anything needing Okta or GitHub credentials goes in a separate workflow.
 - The CLI uses stdlib `argparse`. Propose any new dependency before adding it.
 - `jml validate` (`src/jml/validate.py`, models in `src/jml/models.py`) owns the people-file rules listed in its module docstring. Each rule has a passing and a failing fixture under `tests/fixtures/cases/<rule>/`; a case holds only the files that differ from `tests/fixtures/base/`. A new rule needs both.
+- `jml plan` (`src/jml/planner.py`) talks to Okta and GitHub only through the ports in `src/jml/ports.py`; `src/jml/fakes.py` implements them in memory and keeps the API rules the planner relies on. A new change type needs a class in `src/jml/changes.py`, a case in `src/jml/apply.py`, and a scenario in the apply-then-plan-is-empty test in `tests/test_planner.py`.
+- The README's try-it block is run by `tests/test_plan_cli.py`; keep it to plain `uv run jml ...` lines.
 - Sample data is fictional. Only `codyjohnsontx` and `pedalworks-bot` may appear as `github` handles; everyone else is Okta only (a test enforces this).
 
 ## Maintaining this file
