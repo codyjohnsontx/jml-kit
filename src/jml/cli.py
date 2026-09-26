@@ -2,10 +2,26 @@
 
 import argparse
 import sys
+from dataclasses import replace
+from datetime import date
 from importlib.metadata import version
 from pathlib import Path
 
-from jml.validate import BaseRevisionError, read_base_people_ids, validate
+from jml import demo, render
+from jml.models import PeopleFile, TeamsFile
+from jml.planner import Files, plan
+from jml.validate import (
+    PEOPLE_FILE,
+    TEAMS_FILE,
+    BaseRevisionError,
+    InvalidFile,
+    Source,
+    check_plannable,
+    load_text,
+    read_at_revision,
+    read_base_people_ids,
+    validate,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -39,6 +55,55 @@ def build_parser() -> argparse.ArgumentParser:
             "in the file must be in people.archive.yaml"
         ),
     )
+
+    plan_parser = commands.add_parser(
+        "plan",
+        help="show the changes that make Okta and GitHub match the people file",
+        description=(
+            "Validate the files, read live state, and print the changes apply would make, "
+            "those already needed before this change, and unmanaged accounts. Exits 1 if the "
+            "files are invalid or the plan holds a change the kit refuses to make."
+        ),
+    )
+    plan_parser.add_argument(
+        "root",
+        nargs="?",
+        type=Path,
+        default=Path("."),
+        help="directory holding the people file (default: current directory)",
+    )
+    plan_parser.add_argument(
+        "--fake",
+        action="store_true",
+        help=(
+            "plan against an in-memory Okta and GitHub, needing no credentials. The fake "
+            "starts as if the base files were applied (without --base: the file minus its "
+            "newest joiner), plus an unmanaged admin user and one hand-made group membership"
+        ),
+    )
+    plan_parser.add_argument(
+        "--base",
+        metavar="REV",
+        help=(
+            "git revision the change is based on: changes the files at REV would need too "
+            "are shown apart as already needed, and anyone removed since REV must be archived"
+        ),
+    )
+    plan_parser.add_argument(
+        "--prune",
+        action="store_true",
+        help=(
+            "also deactivate Okta users the kit created (they carry jmlId) that are not in "
+            "the file, and remove from the kit's GitHub teams any username that belongs to "
+            "someone in people.archive.yaml; other team members are never removed"
+        ),
+    )
+    plan_parser.add_argument(
+        "--format",
+        choices=["markdown", "json"],
+        default="markdown",
+        help="output format (default: markdown)",
+    )
     return parser
 
 
@@ -65,10 +130,87 @@ def run_validate(root: Path, base: str | None) -> int:
     return 0
 
 
+def read_base_files(root: Path, base: str, files: Files) -> Files:
+    """The files at revision `base`. Raises InvalidFile if they do not parse or break a
+    rule the planner relies on. A file missing at `base` means no people yet, or the
+    current team definitions."""
+    people_text = read_at_revision(root, base, PEOPLE_FILE)
+    teams_text = read_at_revision(root, base, TEAMS_FILE)
+    people, people_src = (
+        load_text(people_text, PEOPLE_FILE, PeopleFile)
+        if people_text is not None
+        else (files.people.model_copy(update={"people": []}), Source(PEOPLE_FILE, {}))
+    )
+    teams, teams_src = (
+        load_text(teams_text, TEAMS_FILE, TeamsFile)
+        if teams_text is not None
+        else (files.teams, Source(TEAMS_FILE, {}))
+    )
+    errors = check_plannable(people, people_src, teams, teams_src)
+    if errors:
+        raise InvalidFile(errors)
+    return Files(people, teams, files.archive)
+
+
+def describe_invalid_base(base: str, errors: list[str]) -> str:
+    more = f" and {len(errors) - 1} more problem(s)" if len(errors) > 1 else ""
+    return f"the files at {base} are not valid: {errors[0]}{more}"
+
+
+def run_plan(args: argparse.Namespace, today: date) -> int:
+    root: Path = args.root
+    base_ids = None
+    if args.base:
+        try:
+            base_ids = read_base_people_ids(root, args.base)
+        except BaseRevisionError as exc:
+            print(f"jml plan: {exc}", file=sys.stderr)
+            return 2
+    result = validate(root, base_ids)
+    if not result.ok:
+        for error in result.errors:
+            print(error, file=sys.stderr)
+        print(f"jml plan: {len(result.errors)} problem(s) found", file=sys.stderr)
+        return 1
+    assert result.people and result.teams and result.archive
+    files = Files(result.people, result.teams, result.archive)
+
+    base = None
+    base_error = None
+    if args.base:
+        try:
+            base = read_base_files(root, args.base, files)
+        except InvalidFile as exc:
+            base_error = describe_invalid_base(args.base, exc.errors)
+            print(
+                f"jml plan: {base_error}; changes already needed before this change are "
+                "not shown apart",
+                file=sys.stderr,
+            )
+    if not args.fake:
+        print(
+            "jml plan: the Okta and GitHub adapters are not built yet; run with --fake",
+            file=sys.stderr,
+        )
+        return 2
+    seed = base or demo.demo_base(files)
+    okta, github = demo.fake_org(seed, today)
+    drift_base = None if args.base and base is None else seed
+    result_plan = plan(files, okta, github, today=today, prune=args.prune, base=drift_base)
+    result_plan = replace(result_plan, base_error=base_error)
+    if args.format == "json":
+        print(render.to_json(result_plan), end="")
+    else:
+        print(render.to_markdown(result_plan, "Against a fake Okta and GitHub."), end="")
+    return 1 if result_plan.refused else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command == "validate":
         return run_validate(args.root, args.base)
+    if args.command == "plan":
+        return run_plan(args, date.today())
     parser.print_help()
     return 0

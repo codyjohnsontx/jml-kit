@@ -87,6 +87,10 @@ FAIL_CASES = {
     "2-identity/fail-archived-id-reused": (
         "people.yaml:9: id 'sam.okafor' is archived in people.archive.yaml and cannot be reused"
     ),
+    "2-identity/fail-archive-bad-github": (
+        "people.archive.yaml:4: archived[0] (jo.lee).github: 'sokafor-' is not a valid "
+        "GitHub username"
+    ),
     "2-identity/fail-bad-email": (
         "people.yaml:5: people[0] (ana.ruiz).email: 'ana.ruiz.pedalworks.example' is not "
         "a valid email address"
@@ -122,6 +126,15 @@ FAIL_CASES = {
     "2-identity/fail-email-off-domain": (
         "people.yaml:5: ana.ruiz: email 'ana.ruiz@gmail.com' is not on the company domain"
         " pedalworks.example"
+    ),
+    "3-references/fail-duplicate-group": "teams.yaml:1: groups: 'Engineering' is declared twice",
+    "3-references/fail-everyone-group": (
+        "teams.yaml:1: groups: 'Everyone' is Okta's built-in group that every user belongs "
+        "to, so the kit cannot manage it"
+    ),
+    "3-references/fail-github-team-not-slug": (
+        "teams.yaml:5: teams.engineering.github_team: 'Engineering Team' is not a GitHub team "
+        "slug: use lowercase letters, digits and single hyphens, as in the team's URL"
     ),
     "3-references/fail-undeclared-extra-group": (
         "people.yaml:9: ana.ruiz: extra group 'on-call' is not in the groups list in teams.yaml"
@@ -212,9 +225,10 @@ def test_missing_archive_file(tmp_path):
 def test_repository_sample_data_is_valid():
     result = validate(REPO_ROOT)
     assert result.errors == []
-    assert result.people is not None
+    assert result.people is not None and result.archive is not None
     handles = {p.github for p in result.people.people if p.github}
     assert handles == {"codyjohnsontx", "pedalworks-bot"}
+    assert {entry.github for entry in result.archive.archived if entry.github} <= handles
     assert all(p.email.endswith("@pedalworks.example") for p in result.people.people)
 
 

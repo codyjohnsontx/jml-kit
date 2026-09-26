@@ -10,6 +10,7 @@ from datetime import date
 from typing import Annotated, Literal
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -28,6 +29,8 @@ EMAIL_PATTERN = re.compile(
 # GitHub usernames: letters, digits and single hyphens, no leading or trailing hyphen, 1-39 chars.
 GITHUB_PATTERN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}")
 PROFILE_PATTERN = re.compile(r"[a-z0-9][a-z0-9-]*")
+# GitHub team slugs: GitHub lowercases a team name and turns other characters into hyphens.
+TEAM_SLUG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 ISO_DATE_PATTERN = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
 
@@ -41,6 +44,15 @@ def _iso_date(value: object) -> date:
 
 
 IsoDate = Annotated[date, BeforeValidator(_iso_date)]
+
+
+def _github_username(value: str) -> str:
+    if not GITHUB_PATTERN.fullmatch(value):
+        raise ValueError(f"{value!r} is not a valid GitHub username")
+    return value
+
+
+GithubUsername = Annotated[str, AfterValidator(_github_username)]
 NonEmptyStr = Annotated[str, Field(min_length=1)]
 
 
@@ -56,7 +68,7 @@ class Person(_Model):
     status: Literal["active", "leaver"]
     start: IsoDate
     end: IsoDate | None = None
-    github: str | None = None
+    github: GithubUsername | None = None
     extra_groups: list[NonEmptyStr] = []
 
     @field_validator("id")
@@ -74,13 +86,6 @@ class Person(_Model):
     def _check_email(cls, value: str) -> str:
         if not EMAIL_PATTERN.fullmatch(value):
             raise ValueError(f"{value!r} is not a valid email address")
-        return value
-
-    @field_validator("github")
-    @classmethod
-    def _check_github(cls, value: str | None) -> str | None:
-        if value is not None and not GITHUB_PATTERN.fullmatch(value):
-            raise ValueError(f"{value!r} is not a valid GitHub username")
         return value
 
     @model_validator(mode="after")
@@ -111,6 +116,16 @@ class Team(_Model):
     github_team: NonEmptyStr | None = None
     mac_profile: str
 
+    @field_validator("github_team")
+    @classmethod
+    def _check_github_team(cls, value: str | None) -> str | None:
+        if value is not None and not TEAM_SLUG_PATTERN.fullmatch(value):
+            raise ValueError(
+                f"{value!r} is not a GitHub team slug: use lowercase letters, digits and "
+                "single hyphens, as in the team's URL"
+            )
+        return value
+
     @field_validator("mac_profile")
     @classmethod
     def _check_profile(cls, value: str) -> str:
@@ -129,6 +144,7 @@ class TeamsFile(_Model):
 class ArchivedPerson(_Model):
     id: str
     deactivated_on: IsoDate
+    github: GithubUsername | None = None
 
 
 class ArchiveFile(_Model):

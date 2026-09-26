@@ -24,6 +24,7 @@ jobs:
       - run: uv run ruff check
       - run: uv run pytest
       - run: uv run jml --help
+      - run: uv run jml plan --fake
       - name: jml validate
         env:
           # The PR's base commit, or the previous tip of main on a push.

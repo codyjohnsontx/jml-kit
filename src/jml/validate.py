@@ -7,7 +7,8 @@ Validation needs no credentials. It checks, in order:
 2. Ids, emails and GitHub usernames are well formed and unique (emails and GitHub usernames
    case-insensitively), emails are on the company domain, and no active person reuses an
    archived id.
-3. Every team exists, and every Okta group is declared in teams.yaml.
+3. Every team exists, every Okta group is declared in teams.yaml, and no group is
+   declared twice or is Okta's built-in Everyone group. GitHub teams are given as slugs.
 4. Leavers have an end date, active people do not, and end is not before start.
 5. Active people fit in Okta's 10-user free plan limit minus the reserved seats.
 6. Anyone removed from people.yaml since the base revision is in people.archive.yaml.
@@ -26,6 +27,7 @@ from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
 from jml.models import ArchiveFile, PeopleFile, TeamsFile
+from jml.ports import EVERYONE
 
 PEOPLE_FILE = "people.yaml"
 TEAMS_FILE = "teams.yaml"
@@ -113,6 +115,7 @@ class Result:
     errors: list[str]
     people: PeopleFile | None = None
     teams: TeamsFile | None = None
+    archive: ArchiveFile | None = None
 
     @property
     def ok(self) -> bool:
@@ -181,9 +184,14 @@ def _load[M: BaseModel](path: Path, model: type[M]) -> tuple[M, Source]:
         text = path.read_bytes().decode("utf-8")
     except UnicodeDecodeError as exc:
         raise InvalidFile([f"{path.name}: file is not valid UTF-8"]) from exc
-    data, source = parse_yaml(text, path.name)
+    return load_text(text, path.name, model)
+
+
+def load_text[M: BaseModel](text: str, name: str, model: type[M]) -> tuple[M, Source]:
+    """Parse one file's text into its model, raising InvalidFile with every problem."""
+    data, source = parse_yaml(text, name)
     if data is None:
-        raise InvalidFile([f"{path.name}: file is empty"])
+        raise InvalidFile([f"{name}: file is empty"])
     try:
         return model.model_validate(data), source
     except PydanticValidationError as exc:
@@ -224,21 +232,27 @@ def _describe_location(loc: tuple[int | str, ...], data: Any) -> str:
     return "".join(parts)
 
 
-def read_base_people_ids(root: Path, base: str) -> set[str]:
-    """Return the person ids in people.yaml at git revision `base` (empty if it had none)."""
+def read_at_revision(root: Path, base: str, name: str) -> str | None:
+    """Return file `name` under `root` at git revision `base`, or None if it had none."""
 
     def git(*args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
 
     if git("rev-parse", "--verify", "--quiet", f"{base}^{{commit}}").returncode != 0:
         raise BaseRevisionError(f"base revision {base!r} is not a commit in this repository")
-    spec = f"{base}:./{PEOPLE_FILE}"
+    spec = f"{base}:./{name}"
     if git("cat-file", "-e", spec).returncode != 0:
-        return set()
+        return None
     shown = git("show", spec)
     if shown.returncode != 0:
         raise BaseRevisionError(f"cannot read {spec}: {shown.stderr.strip()}")
-    return people_ids(shown.stdout)
+    return shown.stdout
+
+
+def read_base_people_ids(root: Path, base: str) -> set[str]:
+    """Return the person ids in people.yaml at git revision `base` (empty if it had none)."""
+    text = read_at_revision(root, base, PEOPLE_FILE)
+    return people_ids(text) if text is not None else set()
 
 
 def people_ids(text: str) -> set[str]:
@@ -285,7 +299,17 @@ def validate(root: Path, base_ids: set[str] | None = None) -> Result:
     if base_ids is not None:
         errors += _check_history(people, archive, base_ids)
     errors += _check_profiles(root, teams, teams_src)
-    return Result(errors, people, teams)
+    return Result(errors, people, teams, archive)
+
+
+def check_plannable(
+    people: PeopleFile, people_src: Source, teams: TeamsFile, teams_src: Source
+) -> list[str]:
+    """The rules the planner relies on: unique ids, emails and GitHub usernames, and
+    every team and group declared."""
+    return _check_unique(people, people_src) + _check_references(
+        people, people_src, teams, teams_src
+    )
 
 
 def _check_unique(people: PeopleFile, src: Source) -> list[str]:
@@ -332,6 +356,17 @@ def _check_references(
 ) -> list[str]:
     errors = []
     declared = set(teams.groups)
+    seen: set[str] = set()
+    for g, group in enumerate(teams.groups):
+        # Okta group names are case-insensitive, and every user is always in Everyone.
+        if group.lower() == EVERYONE.lower():
+            errors.append(
+                f"{teams_src.at('groups', g)}: groups: {group!r} is Okta's built-in group "
+                "that every user belongs to, so the kit cannot manage it"
+            )
+        elif group.lower() in seen:
+            errors.append(f"{teams_src.at('groups', g)}: groups: {group!r} is declared twice")
+        seen.add(group.lower())
     for name, team in teams.teams.items():
         for g, group in enumerate(team.okta_groups):
             if group not in declared:
