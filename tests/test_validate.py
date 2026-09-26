@@ -225,9 +225,10 @@ def test_missing_archive_file(tmp_path):
 def test_repository_sample_data_is_valid():
     result = validate(REPO_ROOT)
     assert result.errors == []
-    assert result.people is not None
+    assert result.people is not None and result.archive is not None
     handles = {p.github for p in result.people.people if p.github}
     assert handles == {"codyjohnsontx", "pedalworks-bot"}
+    assert {entry.github for entry in result.archive.archived if entry.github} <= handles
     assert all(p.email.endswith("@pedalworks.example") for p in result.people.people)
 
 
