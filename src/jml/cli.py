@@ -179,7 +179,8 @@ def run_plan(args: argparse.Namespace, today: date) -> int:
         return 2
     seed = base or demo.demo_base(files)
     okta, github = demo.fake_org(seed, today)
-    result_plan = plan(files, okta, github, today=today, prune=args.prune, base=seed)
+    drift_base = None if args.base and base is None else seed
+    result_plan = plan(files, okta, github, today=today, prune=args.prune, base=drift_base)
     if args.format == "json":
         print(render.to_json(result_plan), end="")
     else:

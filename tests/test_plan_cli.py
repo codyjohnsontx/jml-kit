@@ -90,6 +90,23 @@ def test_plan_rejects_an_unknown_base(repo, capsys):
     assert "not a commit" in err
 
 
+def test_plan_with_an_unparsable_base_does_not_show_drift_apart(repo, capsys):
+    good = (repo / "teams.yaml").read_text()
+    (repo / "teams.yaml").write_text("groups: [\n")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t"]
+        + ["commit", "-q", "-m", "broken"],
+        check=True,
+    )
+    (repo / "teams.yaml").write_text(good)
+    code, out, err = run(["plan", str(repo), "--fake", "--base", "HEAD"], capsys)
+    assert code == 0
+    assert "do not parse" in err
+    assert "### Drift" not in out
+    assert "run with `--base` to show it apart" in out
+
+
 def test_plan_exits_1_when_refused(repo, capsys, monkeypatch):
     # Remove a person and archive them while their fake Okta user is still active.
     people = repo / "people.yaml"
