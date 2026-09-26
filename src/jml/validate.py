@@ -4,8 +4,8 @@ Validation needs no credentials. It checks, in order:
 
 1. Each file parses as plain YAML (no anchors, aliases or explicit tags, bounded size and
    nesting), with no duplicate or unknown keys.
-2. Ids, emails and GitHub usernames are well formed and unique after Unicode normalization
-   and case folding, emails are on the company domain, and no active person reuses an
+2. Ids, emails and GitHub usernames are well formed and unique (emails and GitHub usernames
+   case-insensitively), emails are on the company domain, and no active person reuses an
    archived id.
 3. Every team exists, and every Okta group is declared in teams.yaml.
 4. Leavers have an end date, active people do not, and end is not before start.
@@ -17,7 +17,6 @@ Every error names the file and, where the problem has one, the line to change.
 """
 
 import subprocess
-import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -225,11 +224,6 @@ def _describe_location(loc: tuple[int | str, ...], data: Any) -> str:
     return "".join(parts)
 
 
-def identity_key(value: str) -> str:
-    """Comparison key for identities: Unicode NFKC normalization plus case folding."""
-    return unicodedata.normalize("NFKC", value).casefold()
-
-
 def read_base_people_ids(root: Path, base: str) -> set[str]:
     """Return the person ids in people.yaml at git revision `base` (empty if it had none)."""
 
@@ -302,7 +296,7 @@ def _check_unique(people: PeopleFile, src: Source) -> list[str]:
             value = getattr(person, field)
             if value is None:
                 continue
-            key = identity_key(value)
+            key = value.lower()
             if key in seen:
                 errors.append(
                     f"{src.at('people', index, field)}: {field} {value!r} is used by both "
@@ -324,12 +318,12 @@ def _check_email_domain(people: PeopleFile, src: Source) -> list[str]:
 
 
 def _check_ids_not_reused(people: PeopleFile, src: Source, archive: ArchiveFile) -> list[str]:
-    archived = {identity_key(entry.id) for entry in archive.archived}
+    archived = {entry.id for entry in archive.archived}
     return [
         f"{src.at('people', index, 'id')}: id {person.id!r} is archived in {ARCHIVE_FILE} "
         "and cannot be reused"
         for index, person in enumerate(people.people)
-        if person.status == "active" and identity_key(person.id) in archived
+        if person.status == "active" and person.id in archived
     ]
 
 

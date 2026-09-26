@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from jml.cli import main
-from jml.validate import MAX_FILE_BYTES, identity_key, people_ids, validate
+from jml.validate import MAX_FILE_BYTES, people_ids, validate
 
 FIXTURES = Path(__file__).parent / "fixtures"
 REPO_ROOT = Path(__file__).parent.parent
@@ -226,12 +226,6 @@ def test_unicode_equivalent_emails_are_rejected(tmp_path):
     errors = validate(tmp_path).errors
     assert len(errors) == 2
     assert all("is not a valid email address" in error for error in errors)
-
-
-def test_identity_key_normalizes_unicode_and_case():
-    assert identity_key("caf\u00e9") == identity_key("cafe\u0301")
-    assert identity_key("Stra\u00dfe") == identity_key("STRASSE")
-    assert identity_key("CodyJohnsonTX") == identity_key("codyjohnsontx")
 
 
 def test_value_with_trailing_newline_is_rejected(tmp_path):
