@@ -223,8 +223,7 @@ def _check_unique(people: PeopleFile) -> list[str]:
 def _check_email_domain(people: PeopleFile) -> list[str]:
     domain = f"{people.company}.example".lower()
     return [
-        f"{PEOPLE_FILE}: {person.id}: email {person.email!r} is not on the company domain "
-        f"{domain}"
+        f"{PEOPLE_FILE}: {person.id}: email {person.email!r} is not on the company domain {domain}"
         for person in people.people
         if person.email.rsplit("@", 1)[1].lower() != domain
     ]
