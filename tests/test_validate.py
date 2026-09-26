@@ -87,6 +87,10 @@ FAIL_CASES = {
     "2-identity/fail-archived-id-reused": (
         "people.yaml:9: id 'sam.okafor' is archived in people.archive.yaml and cannot be reused"
     ),
+    "2-identity/fail-archive-bad-github": (
+        "people.archive.yaml:4: archived[0] (jo.lee).github: 'sokafor-' is not a valid "
+        "GitHub username"
+    ),
     "2-identity/fail-bad-email": (
         "people.yaml:5: people[0] (ana.ruiz).email: 'ana.ruiz.pedalworks.example' is not "
         "a valid email address"

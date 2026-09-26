@@ -21,8 +21,9 @@ Rules:
 - A user whose block was removed and who is in people.archive.yaml is deleted, but only
   once DEPROVISIONED. Otherwise the plan refuses, since Okta would deactivate instead.
 - Users without jmlId are never touched. `prune` deactivates users the kit created that
-  are neither in the file nor archived. GitHub accounts carry no jmlId, so members of
-  managed teams who are not in the file are listed as unmanaged and never pruned.
+  are neither in the file nor archived. GitHub accounts carry no jmlId, so `prune` removes
+  a member of a managed team who is not in the file only when the username belongs to
+  someone in people.archive.yaml; any other member is listed as unmanaged and left alone.
 - Given the files at the base revision, a change the base files would also need is drift:
   it was needed before the change under review, because someone changed live state
   outside this repository, an end date passed, or an apply has not run.
@@ -340,12 +341,24 @@ class _Planner:
 
     def _plan_unlisted_github(self) -> None:
         listed = {person.github.lower() for person in self.files.people.people if person.github}
+        archived = {
+            entry.github.lower(): (entry.id, entry.github)
+            for entry in self.files.archive.archived
+            if entry.github
+        }
         for username in sorted(self.live.org_members - listed):
             self.unmanaged.append(Unmanaged("github", "member", username, "not in people.yaml"))
         for username in sorted(set(self.live.invitations) - listed):
             self.unmanaged.append(Unmanaged("github", "invitation", username, "not in people.yaml"))
         for team in _managed_teams(self.files.teams):
             for username in sorted(self.live.team_members.get(team, set()) - listed):
+                if username not in archived:
+                    note = "not in people.yaml"
+                elif self.prune:
+                    self.changes.append(RemoveFromTeam(*archived[username], team))
+                    note = "archived in people.archive.yaml, pruned"
+                else:
+                    note = "archived in people.archive.yaml; --prune removes it"
                 self.unmanaged.append(
-                    Unmanaged("github", "team member", f"{team}/{username}", "not in people.yaml")
+                    Unmanaged("github", "team member", f"{team}/{username}", note)
                 )

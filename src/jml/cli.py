@@ -94,7 +94,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "also deactivate Okta users the kit created (they carry jmlId) that are not in "
-            "the file. GitHub accounts carry no jmlId, so they are never pruned"
+            "the file, and remove from the kit's GitHub teams any username that belongs to "
+            "someone in people.archive.yaml; other team members are never removed"
         ),
     )
     plan_parser.add_argument(

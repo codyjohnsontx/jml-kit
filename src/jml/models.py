@@ -10,6 +10,7 @@ from datetime import date
 from typing import Annotated, Literal
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -43,6 +44,15 @@ def _iso_date(value: object) -> date:
 
 
 IsoDate = Annotated[date, BeforeValidator(_iso_date)]
+
+
+def _github_username(value: str) -> str:
+    if not GITHUB_PATTERN.fullmatch(value):
+        raise ValueError(f"{value!r} is not a valid GitHub username")
+    return value
+
+
+GithubUsername = Annotated[str, AfterValidator(_github_username)]
 NonEmptyStr = Annotated[str, Field(min_length=1)]
 
 
@@ -58,7 +68,7 @@ class Person(_Model):
     status: Literal["active", "leaver"]
     start: IsoDate
     end: IsoDate | None = None
-    github: str | None = None
+    github: GithubUsername | None = None
     extra_groups: list[NonEmptyStr] = []
 
     @field_validator("id")
@@ -76,13 +86,6 @@ class Person(_Model):
     def _check_email(cls, value: str) -> str:
         if not EMAIL_PATTERN.fullmatch(value):
             raise ValueError(f"{value!r} is not a valid email address")
-        return value
-
-    @field_validator("github")
-    @classmethod
-    def _check_github(cls, value: str | None) -> str | None:
-        if value is not None and not GITHUB_PATTERN.fullmatch(value):
-            raise ValueError(f"{value!r} is not a valid GitHub username")
         return value
 
     @model_validator(mode="after")
@@ -141,6 +144,7 @@ class TeamsFile(_Model):
 class ArchivedPerson(_Model):
     id: str
     deactivated_on: IsoDate
+    github: GithubUsername | None = None
 
 
 class ArchiveFile(_Model):

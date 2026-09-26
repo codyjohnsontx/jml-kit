@@ -58,12 +58,13 @@ def person(id: str, team: str = "engineering", **fields) -> dict:
     }
 
 
-def files(*people: dict, archived: tuple[str, ...] = (), teams: dict = TEAMS) -> Files:
+def files(*people: dict, archived: tuple[str | dict, ...] = (), teams: dict = TEAMS) -> Files:
+    entries = [{"id": entry} if isinstance(entry, str) else entry for entry in archived]
     return Files(
         PeopleFile.model_validate({"company": "pedalworks", "people": list(people)}),
         TeamsFile.model_validate(teams),
         ArchiveFile.model_validate(
-            {"archived": [{"id": id, "deactivated_on": "2026-09-01"} for id in archived]}
+            {"archived": [{"deactivated_on": "2026-09-01", **entry} for entry in entries]}
         ),
     )
 
@@ -316,31 +317,42 @@ def test_prune_touches_only_what_the_kit_created():
     seed_unmanaged(org)
     marketing = org.okta.group_named("marketing").okta_id
     org.okta.add_to_group(marketing, org.user("sam.okafor").okta_id)
-    org.github.members.add("org-admin")  # an org admin added to a managed team by hand
-    org.github.teams["engineering"].add("org-admin")
+    for username in ("org-admin", "jlee-demo"):  # added to a managed team by hand
+        org.github.members.add(username)
+        org.github.teams["engineering"].add(username)
+    current = files(ANA, archived=({"id": "jo.lee", "github": "JLee-Demo"},))
 
-    without = org.plan(files(ANA))
+    without = org.plan(current)
     assert without.changes == ()
-    assert Unmanaged(
-        "okta",
-        "user",
-        "sam.okafor@pedalworks.example",
-        "created by jml-kit but not in people.yaml; --prune deactivates it",
-    ) in set(without.unmanaged)
+    assert {
+        Unmanaged(
+            "okta",
+            "user",
+            "sam.okafor@pedalworks.example",
+            "created by jml-kit but not in people.yaml; --prune deactivates it",
+        ),
+        Unmanaged(
+            "github",
+            "team member",
+            "engineering/jlee-demo",
+            "archived in people.archive.yaml; --prune removes it",
+        ),
+    } <= set(without.unmanaged)
 
-    pruned = org.apply(files(ANA), prune=True)
+    pruned = org.apply(current, prune=True)
     assert pruned.changes == (
         RemoveFromGroup("sam.okafor", "all-staff"),
         RemoveFromGroup("sam.okafor", "design"),
         RemoveFromGroup("sam.okafor", "marketing"),
+        RemoveFromTeam("jo.lee", "JLee-Demo", "engineering"),
         DeactivateUser("sam.okafor"),
     )
     team_member = Unmanaged("github", "team member", "engineering/org-admin", "not in people.yaml")
     assert team_member in set(pruned.unmanaged)
     assert org.user("sam.okafor").status == UserStatus.DEPROVISIONED
     assert org.groups_of("sam.okafor") == {"Everyone"}
-    assert "org-admin" in org.github.teams["engineering"]
-    assert org.plan(files(ANA), prune=True).changes == ()
+    assert org.github.teams["engineering"] == {"aruiz-demo", "org-admin"}
+    assert org.plan(current, prune=True).changes == ()
 
 
 def test_delete_guard_refuses_a_user_that_is_not_deprovisioned():

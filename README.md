@@ -18,7 +18,7 @@ The demo company is Pedalworks, a fictional bike maker. Its emails are on `pedal
 
 - [`people.yaml`](people.yaml) lists everyone: a stable `id`, name, email, team, `status` (`active` or `leaver`), start and end dates, an optional GitHub username, and any Okta groups beyond their team's defaults.
 - [`teams.yaml`](teams.yaml) declares every Okta group the kit may assign, and what each team gets by default: Okta groups, a GitHub team, and a Mac setup profile.
-- [`people.archive.yaml`](people.archive.yaml) records everyone who has been deactivated. A person's block can leave `people.yaml` only once they are listed there.
+- [`people.archive.yaml`](people.archive.yaml) records everyone who has been deactivated, with their GitHub username if they had one. A person's block can leave `people.yaml` only once they are listed there.
 
 Only two people have a GitHub username: the owner's own account and one machine account. GitHub allows each real person one free account, so the other fictional people are Okta only. That is deliberate, not a gap.
 
@@ -43,7 +43,7 @@ Every problem is reported at once, as `file:line: message` (or `file: message` w
 - A leaver whose end date is still ahead is suspended and keeps their groups, in case the date moves. On the end date they are removed from GitHub and from every Okta group they belong to, declared in `teams.yaml` or not, then deactivated.
 - A deactivated person is deleted only after their block leaves `people.yaml` and they are in `people.archive.yaml`. Okta turns a delete of a user who is not deactivated into a deactivation, so the plan refuses it instead.
 - Given the base revision (`--base`), changes the files at that revision need too are listed apart from the change under review, as already needed before this change (`"drift": true` in JSON). The plan cannot tell why: someone changed Okta or GitHub outside this repository, an end date has passed, or an apply has not run yet. Apply makes them match either way. If the files at that revision are not valid, the plan says so and lists everything under Changes.
-- Accounts and groups the file does not mention are listed as unmanaged and left alone, such as the owner's super admin user and Okta's Everyone group. `--prune` deactivates only users the kit created (they carry `jmlId`). GitHub accounts carry no `jmlId`, so a member of the kit's GitHub teams who is not in `people.yaml`, such as an org admin added by hand, is listed as unmanaged and never pruned.
+- Accounts and groups the file does not mention are listed as unmanaged and left alone, such as the owner's super admin user and Okta's Everyone group. `--prune` deactivates only users the kit created (they carry `jmlId`). GitHub accounts carry no `jmlId`, so `--prune` removes a member of the kit's GitHub teams only when the username belongs to someone in `people.archive.yaml`. Any other member who is not in `people.yaml`, such as an org admin added by hand, is listed as unmanaged and never removed.
 
 ### Try it
 
