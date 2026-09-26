@@ -1,0 +1,8 @@
+company: pedalworks
+people:
+  - id: ana.ruiz
+    name: !!binary QW5hIFJ1aXo=
+    email: ana.ruiz@pedalworks.example
+    team: engineering
+    status: active
+    start: 2026-10-01

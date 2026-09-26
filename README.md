@@ -24,15 +24,15 @@ Only two people have a GitHub username: the owner's own account and one machine 
 
 `jml validate` checks the files on every pull request, with no credentials:
 
-1. The YAML parses, with no duplicate or unknown keys, so a typo such as `team_:` fails instead of silently doing nothing.
-2. Ids, emails and GitHub usernames are well formed and unique. Emails are on the company domain (`<company>.example`), and an archived id is never reused by an active person.
+1. The YAML parses, with no duplicate or unknown keys, so a typo such as `team_:` fails instead of silently doing nothing. Only plain YAML is accepted: anchors, aliases, explicit tags and merge keys are refused, so every value reads exactly as it appears in the diff, and file size and nesting depth are capped.
+2. Ids, emails and GitHub usernames are well formed and unique, compared after Unicode normalization and case folding. Emails are plain ASCII addresses. Emails are on the company domain (`<company>.example`), and an archived id is never reused by an active person.
 3. Every person's team exists, and every Okta group is in the declared list, so a misspelled group cannot create a stray group in Okta.
 4. A leaver has an end date, an active person does not, and no end date is before its start date.
 5. Active people fit in Okta's free plan: 10 users, minus 1 reserved for the owner's admin user (the reserve is configurable under `seats.reserved` in `people.yaml`).
 6. Anyone removed from `people.yaml` since the base commit is in `people.archive.yaml` (`jml validate --base <rev>`), so nobody vanishes from the audit trail.
 7. Every team's Mac profile has a `mac/profiles/<name>.Brewfile`.
 
-Every problem is reported at once, with the file and person it concerns.
+Every problem is reported at once, as `file:line: message`, naming the person or team it concerns.
 
 ## Development
 

@@ -2,17 +2,22 @@
 
 Validation needs no credentials. It checks, in order:
 
-1. Each file parses as YAML, with no duplicate or unknown keys.
-2. Ids, emails and GitHub usernames are well formed and unique, emails are on the
-   company domain, and no active person reuses an archived id.
+1. Each file parses as plain YAML (no anchors, aliases or explicit tags, bounded size and
+   nesting), with no duplicate or unknown keys.
+2. Ids, emails and GitHub usernames are well formed and unique after Unicode normalization
+   and case folding, emails are on the company domain, and no active person reuses an
+   archived id.
 3. Every team exists, and every Okta group is declared in teams.yaml.
 4. Leavers have an end date, active people do not, and end is not before start.
 5. Active people fit in Okta's 10-user free plan limit minus the reserved seats.
 6. Anyone removed from people.yaml since the base revision is in people.archive.yaml.
 7. Every team's mac_profile has a mac/profiles/<name>.Brewfile.
+
+Every error names the file and, where the problem has one, the line to change.
 """
 
 import subprocess
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -28,14 +33,55 @@ TEAMS_FILE = "teams.yaml"
 ARCHIVE_FILE = "people.archive.yaml"
 PROFILES_DIR = Path("mac") / "profiles"
 OKTA_SEAT_LIMIT = 10
+# The files are small and hand-edited; anything bigger or deeper is a mistake or an attack.
+MAX_FILE_BYTES = 256 * 1024
+MAX_DEPTH = 10
+
+MERGE_TAG = "tag:yaml.org,2002:merge"
+YamlPath = tuple[int | str, ...]
 
 
 class _Loader(yaml.SafeLoader):
-    """SafeLoader that rejects duplicate keys and leaves dates as strings for the models."""
+    """SafeLoader restricted to plain YAML a reviewer can read in a diff.
+
+    Rejects anchors, aliases, explicit tags, merge keys, non-scalar keys, duplicate keys
+    and deep nesting. Leaves dates as strings for the models to parse.
+    """
+
+    _depth = 0
+
+    def compose_node(self, parent: yaml.Node | None, index: Any) -> yaml.Node:
+        event = self.peek_event()
+        if isinstance(event, yaml.AliasEvent) or getattr(event, "anchor", None):
+            raise yaml.composer.ComposerError(
+                None, None, "anchors and aliases are not allowed", event.start_mark
+            )
+        tag = getattr(event, "tag", None)
+        if tag is not None:
+            raise yaml.composer.ComposerError(
+                None, None, f"explicit tag {tag!r} is not allowed", event.start_mark
+            )
+        if self._depth >= MAX_DEPTH:
+            raise yaml.composer.ComposerError(
+                None, None, f"nesting deeper than {MAX_DEPTH} levels", event.start_mark
+            )
+        self._depth += 1
+        try:
+            return super().compose_node(parent, index)
+        finally:
+            self._depth -= 1
 
     def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict[Any, Any]:
         seen: set[Any] = set()
         for key_node, _ in node.value:
+            if not isinstance(key_node, yaml.ScalarNode):
+                raise yaml.constructor.ConstructorError(
+                    None, None, "mapping keys must be plain values", key_node.start_mark
+                )
+            if key_node.tag == MERGE_TAG:
+                raise yaml.constructor.ConstructorError(
+                    None, None, "merge keys (<<) are not allowed", key_node.start_mark
+                )
             key = self.construct_object(key_node, deep=deep)
             if key in seen:
                 raise yaml.constructor.ConstructorError(
@@ -74,34 +120,78 @@ class Result:
         return not self.errors
 
 
-def parse_yaml(text: str, name: str) -> Any:
+@dataclass(frozen=True)
+class Source:
+    """A parsed file's name and the line each value came from, for error messages."""
+
+    name: str
+    lines: dict[YamlPath, int]
+
+    def at(self, *path: int | str) -> str:
+        """Return 'people.yaml:12' for the nearest recorded line of `path`."""
+        while path and path not in self.lines:
+            path = path[:-1]
+        line = self.lines.get(path)
+        return f"{self.name}:{line}" if line else self.name
+
+
+def parse_yaml(text: str, name: str) -> tuple[Any, Source]:
+    """Parse one YAML document, returning its data and where each value came from."""
+    if len(text.encode("utf-8")) > MAX_FILE_BYTES:
+        raise InvalidFile([f"{name}: file is larger than {MAX_FILE_BYTES} bytes"])
+    loader = _Loader(text)
     try:
-        return yaml.load(text, Loader=_Loader)
+        node = loader.get_single_node()
+        data = None if node is None else loader.construct_document(node)
     except yaml.YAMLError as exc:
-        raise InvalidFile([f"{name}: invalid YAML: {_describe_yaml_error(exc)}"]) from exc
+        raise InvalidFile([_describe_yaml_error(exc, name)]) from exc
+    finally:
+        loader.dispose()
+    lines: dict[YamlPath, int] = {}
+    if node is not None:
+        _record_lines(node, (), lines)
+    return data, Source(name, lines)
 
 
-def _describe_yaml_error(exc: yaml.YAMLError) -> str:
+def _record_lines(node: yaml.Node, path: YamlPath, lines: dict[YamlPath, int]) -> None:
+    lines[path] = node.start_mark.line + 1
+    if isinstance(node, yaml.MappingNode):
+        for key_node, value_node in node.value:
+            child = (*path, key_node.value)
+            _record_lines(value_node, child, lines)
+            lines[child] = key_node.start_mark.line + 1  # point at the key, not its value
+    elif isinstance(node, yaml.SequenceNode):
+        for index, item in enumerate(node.value):
+            _record_lines(item, (*path, index), lines)
+
+
+def _describe_yaml_error(exc: yaml.YAMLError, name: str) -> str:
     mark = getattr(exc, "problem_mark", None)
     problem = getattr(exc, "problem", None) or str(exc)
     if mark is None:
-        return problem
-    return f"{problem} (line {mark.line + 1}, column {mark.column + 1})"
+        return f"{name}: invalid YAML: {problem}"
+    return f"{name}:{mark.line + 1}: invalid YAML: {problem} (column {mark.column + 1})"
 
 
-def _load[M: BaseModel](path: Path, model: type[M]) -> M:
+def _load[M: BaseModel](path: Path, model: type[M]) -> tuple[M, Source]:
     if not path.is_file():
         raise InvalidFile([f"{path.name}: file not found"])
-    data = parse_yaml(path.read_text(encoding="utf-8"), path.name)
+    if path.stat().st_size > MAX_FILE_BYTES:
+        raise InvalidFile([f"{path.name}: file is larger than {MAX_FILE_BYTES} bytes"])
+    try:
+        text = path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise InvalidFile([f"{path.name}: file is not valid UTF-8"]) from exc
+    data, source = parse_yaml(text, path.name)
     if data is None:
         raise InvalidFile([f"{path.name}: file is empty"])
     try:
-        return model.model_validate(data)
+        return model.model_validate(data), source
     except PydanticValidationError as exc:
-        raise InvalidFile(_describe_model_errors(exc, path.name, data)) from exc
+        raise InvalidFile(_describe_model_errors(exc, source, data)) from exc
 
 
-def _describe_model_errors(exc: PydanticValidationError, name: str, data: Any) -> list[str]:
+def _describe_model_errors(exc: PydanticValidationError, source: Source, data: Any) -> list[str]:
     errors = []
     for error in exc.errors():
         where = _describe_location(error["loc"], data)
@@ -114,7 +204,8 @@ def _describe_model_errors(exc: PydanticValidationError, name: str, data: Any) -
                 message = str(error["ctx"]["error"])
             case _:
                 message = error["msg"]
-        errors.append(f"{name}: {where}: {message}" if where else f"{name}: {message}")
+        at = source.at(*error["loc"])
+        errors.append(f"{at}: {where}: {message}" if where else f"{at}: {message}")
     return errors
 
 
@@ -132,6 +223,11 @@ def _describe_location(loc: tuple[int | str, ...], data: Any) -> str:
             parts.append(f".{item}" if parts else item)
             node = node.get(item) if isinstance(node, dict) else None
     return "".join(parts)
+
+
+def identity_key(value: str) -> str:
+    """Comparison key for identities: Unicode NFKC normalization plus case folding."""
+    return unicodedata.normalize("NFKC", value).casefold()
 
 
 def read_base_people_ids(root: Path, base: str) -> set[str]:
@@ -154,7 +250,7 @@ def read_base_people_ids(root: Path, base: str) -> set[str]:
 def people_ids(text: str) -> set[str]:
     """Collect person ids from people.yaml text, tolerating a file that fails validation."""
     try:
-        data = parse_yaml(text, PEOPLE_FILE)
+        data, _ = parse_yaml(text, PEOPLE_FILE)
     except InvalidFile:
         return set()
     people = data.get("people") if isinstance(data, dict) else None
@@ -183,93 +279,96 @@ def validate(root: Path, base_ids: set[str] | None = None) -> Result:
     if errors:
         return Result(errors)
 
-    people: PeopleFile = loaded[PEOPLE_FILE]
-    teams: TeamsFile = loaded[TEAMS_FILE]
-    archive: ArchiveFile = loaded[ARCHIVE_FILE]
+    people, people_src = loaded[PEOPLE_FILE]
+    teams, teams_src = loaded[TEAMS_FILE]
+    archive, _ = loaded[ARCHIVE_FILE]
 
-    errors += _check_unique(people)
-    errors += _check_email_domain(people)
-    errors += _check_ids_not_reused(people, archive)
-    errors += _check_references(people, teams)
-    errors += _check_seats(people)
+    errors += _check_unique(people, people_src)
+    errors += _check_email_domain(people, people_src)
+    errors += _check_ids_not_reused(people, people_src, archive)
+    errors += _check_references(people, people_src, teams, teams_src)
+    errors += _check_seats(people, people_src)
     if base_ids is not None:
         errors += _check_history(people, archive, base_ids)
-    errors += _check_profiles(root, teams)
+    errors += _check_profiles(root, teams, teams_src)
     return Result(errors, people, teams)
 
 
-def _check_unique(people: PeopleFile) -> list[str]:
+def _check_unique(people: PeopleFile, src: Source) -> list[str]:
     errors = []
-    for field, normalize in (
-        ("id", str),
-        ("email", str.lower),
-        ("github", str.lower),
-    ):
+    for field in ("id", "email", "github"):
         seen: dict[str, str] = {}
-        for person in people.people:
+        for index, person in enumerate(people.people):
             value = getattr(person, field)
             if value is None:
                 continue
-            key = normalize(value)
+            key = identity_key(value)
             if key in seen:
                 errors.append(
-                    f"{PEOPLE_FILE}: {field} {value!r} is used by both {seen[key]} and {person.id}"
+                    f"{src.at('people', index, field)}: {field} {value!r} is used by both "
+                    f"{seen[key]} and {person.id}"
                 )
             else:
                 seen[key] = person.id
     return errors
 
 
-def _check_email_domain(people: PeopleFile) -> list[str]:
+def _check_email_domain(people: PeopleFile, src: Source) -> list[str]:
     domain = f"{people.company}.example".lower()
     return [
-        f"{PEOPLE_FILE}: {person.id}: email {person.email!r} is not on the company domain {domain}"
-        for person in people.people
+        f"{src.at('people', index, 'email')}: {person.id}: email {person.email!r} is not on "
+        f"the company domain {domain}"
+        for index, person in enumerate(people.people)
         if person.email.rsplit("@", 1)[1].lower() != domain
     ]
 
 
-def _check_ids_not_reused(people: PeopleFile, archive: ArchiveFile) -> list[str]:
-    archived = {entry.id for entry in archive.archived}
+def _check_ids_not_reused(people: PeopleFile, src: Source, archive: ArchiveFile) -> list[str]:
+    archived = {identity_key(entry.id) for entry in archive.archived}
     return [
-        f"{PEOPLE_FILE}: id {person.id!r} is archived in {ARCHIVE_FILE} and cannot be reused"
-        for person in people.people
-        if person.status == "active" and person.id in archived
+        f"{src.at('people', index, 'id')}: id {person.id!r} is archived in {ARCHIVE_FILE} "
+        "and cannot be reused"
+        for index, person in enumerate(people.people)
+        if person.status == "active" and identity_key(person.id) in archived
     ]
 
 
-def _check_references(people: PeopleFile, teams: TeamsFile) -> list[str]:
+def _check_references(
+    people: PeopleFile, people_src: Source, teams: TeamsFile, teams_src: Source
+) -> list[str]:
     errors = []
     declared = set(teams.groups)
     for name, team in teams.teams.items():
-        for group in team.okta_groups:
+        for g, group in enumerate(team.okta_groups):
             if group not in declared:
                 errors.append(
-                    f"{TEAMS_FILE}: teams.{name}.okta_groups: {group!r} is not in the groups list"
+                    f"{teams_src.at('teams', name, 'okta_groups', g)}: "
+                    f"teams.{name}.okta_groups: {group!r} is not in the groups list"
                 )
-    for person in people.people:
+    for index, person in enumerate(people.people):
         if person.team not in teams.teams:
             known = ", ".join(sorted(teams.teams))
             errors.append(
-                f"{PEOPLE_FILE}: {person.id}: team {person.team!r} is not defined in "
-                f"{TEAMS_FILE} (known teams: {known})"
+                f"{people_src.at('people', index, 'team')}: {person.id}: team "
+                f"{person.team!r} is not defined in {TEAMS_FILE} (known teams: {known})"
             )
-        for group in person.extra_groups:
+        for g, group in enumerate(person.extra_groups):
             if group not in declared:
                 errors.append(
-                    f"{PEOPLE_FILE}: {person.id}: extra group {group!r} is not in the "
-                    f"groups list in {TEAMS_FILE}"
+                    f"{people_src.at('people', index, 'extra_groups', g)}: {person.id}: "
+                    f"extra group {group!r} is not in the groups list in {TEAMS_FILE}"
                 )
     return errors
 
 
-def _check_seats(people: PeopleFile) -> list[str]:
+def _check_seats(people: PeopleFile, src: Source) -> list[str]:
     available = OKTA_SEAT_LIMIT - people.seats.reserved
     active = sum(1 for person in people.people if person.status == "active")
     if active <= available:
         return []
+    at = src.at("seats", "reserved") if "seats" in people.model_fields_set else src.at("people")
     return [
-        f"{PEOPLE_FILE}: {active} active people, but only {available} Okta seats are available "
+        f"{at}: {active} active people, but only {available} Okta seats are available "
         f"({OKTA_SEAT_LIMIT} limit minus {people.seats.reserved} reserved)"
     ]
 
@@ -285,10 +384,13 @@ def _check_history(people: PeopleFile, archive: ArchiveFile, base_ids: set[str])
     ]
 
 
-def _check_profiles(root: Path, teams: TeamsFile) -> list[str]:
+def _check_profiles(root: Path, teams: TeamsFile, src: Source) -> list[str]:
     errors = []
     for name, team in teams.teams.items():
         profile = PROFILES_DIR / f"{team.mac_profile}.Brewfile"
         if not (root / profile).is_file():
-            errors.append(f"{TEAMS_FILE}: teams.{name}.mac_profile: {profile} does not exist")
+            errors.append(
+                f"{src.at('teams', name, 'mac_profile')}: teams.{name}.mac_profile: "
+                f"{profile} does not exist"
+            )
     return errors
