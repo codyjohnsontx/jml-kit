@@ -7,7 +7,8 @@ Validation needs no credentials. It checks, in order:
 2. Ids, emails and GitHub usernames are well formed and unique (emails and GitHub usernames
    case-insensitively), emails are on the company domain, and no active person reuses an
    archived id.
-3. Every team exists, and every Okta group is declared in teams.yaml.
+3. Every team exists, every Okta group is declared in teams.yaml, and no group is
+   declared twice or is Okta's built-in Everyone group. GitHub teams are given as slugs.
 4. Leavers have an end date, active people do not, and end is not before start.
 5. Active people fit in Okta's 10-user free plan limit minus the reserved seats.
 6. Anyone removed from people.yaml since the base revision is in people.archive.yaml.
@@ -26,6 +27,7 @@ from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
 from jml.models import ArchiveFile, PeopleFile, TeamsFile
+from jml.ports import EVERYONE
 
 PEOPLE_FILE = "people.yaml"
 TEAMS_FILE = "teams.yaml"
@@ -354,6 +356,17 @@ def _check_references(
 ) -> list[str]:
     errors = []
     declared = set(teams.groups)
+    seen: set[str] = set()
+    for g, group in enumerate(teams.groups):
+        # Okta group names are case-insensitive, and every user is always in Everyone.
+        if group.lower() == EVERYONE.lower():
+            errors.append(
+                f"{teams_src.at('groups', g)}: groups: {group!r} is Okta's built-in group "
+                "that every user belongs to, so the kit cannot manage it"
+            )
+        elif group.lower() in seen:
+            errors.append(f"{teams_src.at('groups', g)}: groups: {group!r} is declared twice")
+        seen.add(group.lower())
     for name, team in teams.teams.items():
         for g, group in enumerate(team.okta_groups):
             if group not in declared:

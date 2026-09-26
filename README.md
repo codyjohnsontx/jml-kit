@@ -26,7 +26,7 @@ Only two people have a GitHub username: the owner's own account and one machine 
 
 1. The YAML parses, with no duplicate or unknown keys, so a typo such as `team_:` fails instead of silently doing nothing. Only plain YAML is accepted: anchors, aliases, explicit tags and merge keys are refused, so every value reads exactly as it appears in the diff, and file size and nesting depth are capped.
 2. Ids, emails and GitHub usernames are well formed and unique, with emails and GitHub usernames compared case-insensitively. Emails are plain ASCII addresses. Emails are on the company domain (`<company>.example`), and an archived id is never reused by an active person.
-3. Every person's team exists, and every Okta group is in the declared list, so a misspelled group cannot create a stray group in Okta.
+3. Every person's team exists, and every Okta group is in the declared list, so a misspelled group cannot create a stray group in Okta. No group is declared twice (names are compared ignoring case) or is Okta's built-in Everyone group, and each `github_team` is a GitHub team slug, as in the team's URL.
 4. A leaver has an end date, an active person does not, and no end date is before its start date.
 5. Active people fit in Okta's free plan: 10 users, minus 1 reserved for the owner's admin user (the reserve is configurable under `seats.reserved` in `people.yaml`).
 6. Anyone removed from `people.yaml` since the base commit is in `people.archive.yaml` (`jml validate --base <rev>`), so nobody vanishes from the audit trail.
@@ -38,11 +38,11 @@ Every problem is reported at once, as `file:line: message` (or `file: message` w
 
 `jml plan` reads the files, reads live state from Okta and GitHub, and prints the changes that would make them match. Apply runs the same plan and makes those changes, so planning again right after apply shows nothing to do. The plan is a list of typed changes, rendered as Markdown for the PR comment or as JSON.
 
-- Changes run in a fixed order: create groups and teams, create and activate users (with no activation email), update profiles, add access, then withdraw it. A mover joins the new team's groups before leaving the old ones.
-- A person's Okta user is found by its `jmlId` attribute, so changing a name or email updates the same user.
+- Changes run in a fixed order: create groups and teams, create and activate users (with no activation email), update profiles, add access, then withdraw it. A mover joins the new team's groups before leaving the old ones. A suspended person set back to active is unsuspended last, once stale access is gone.
+- A person's Okta user is found by its `jmlId` attribute, so changing a name or email updates the same user. If more than one Okta user carries the same `jmlId`, the plan refuses to touch any of them and names every account, and apply checks again before making any change.
 - A leaver whose end date is still ahead is suspended and keeps their groups, in case the date moves. On the end date they are removed from GitHub and from every Okta group they belong to, declared in `teams.yaml` or not, then deactivated.
 - A deactivated person is deleted only after their block leaves `people.yaml` and they are in `people.archive.yaml`. Okta turns a delete of a user who is not deactivated into a deactivation, so the plan refuses it instead.
-- Given the base revision (`--base`), changes the files at that revision need too are listed apart from the change under review, as already needed before this change (`"drift": true` in JSON). The plan cannot tell why: someone changed Okta or GitHub outside this repository, an end date has passed, or an apply has not run yet. Apply makes them match either way.
+- Given the base revision (`--base`), changes the files at that revision need too are listed apart from the change under review, as already needed before this change (`"drift": true` in JSON). The plan cannot tell why: someone changed Okta or GitHub outside this repository, an end date has passed, or an apply has not run yet. Apply makes them match either way. If the files at that revision are not valid, the plan says so and lists everything under Changes.
 - Accounts and groups the file does not mention are listed as unmanaged and left alone, such as the owner's super admin user and Okta's Everyone group. `--prune` deactivates only users the kit created (they carry `jmlId`). GitHub accounts carry no `jmlId`, so a member of the kit's GitHub teams who is not in `people.yaml`, such as an org admin added by hand, is listed as unmanaged and never pruned.
 
 ### Try it

@@ -6,11 +6,10 @@ Okta's built-in Everyone group, and adding a non-member to a GitHub team sends a
 invitation. Every write is appended to `calls`, so tests can check the order.
 """
 
+import re
 from dataclasses import replace
 
-from jml.ports import OktaGroup, OktaUser, UserStatus
-
-EVERYONE = "Everyone"
+from jml.ports import EVERYONE, OktaGroup, OktaUser, UserStatus
 
 
 class FakeError(Exception):
@@ -142,7 +141,15 @@ class FakeOktaDirectory:
             members.discard(user_id)
 
 
+def team_slug(name: str) -> str:
+    """The slug GitHub gives a team: lowercase, with other characters turned to hyphens."""
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
 class FakeGithubOrg:
+    """GitHub usernames are case-insensitive, so the fake stores and compares them
+    lowercased. Teams are addressed by slug, as in the API's URLs."""
+
     def __init__(self) -> None:
         self.teams: dict[str, set[str]] = {}
         self.members: set[str] = set()
@@ -151,14 +158,21 @@ class FakeGithubOrg:
 
     def _team(self, team: str) -> set[str]:
         if team not in self.teams:
-            raise FakeError(f"no team {team}")
+            raise FakeError(f"no team with slug {team}")
         return self.teams[team]
+
+    def add_member(self, username: str, *teams: str) -> None:
+        """Seed an organization member, as if someone added them on github.com."""
+        self.members.add(username.lower())
+        for team in teams:
+            self._team(team).add(username.lower())
 
     def accept_invitation(self, username: str) -> None:
         """Act as the invitee accepting: they become a member of the org and its teams."""
-        for team in self.invitations.pop(username):
-            self._team(team).add(username)
-        self.members.add(username)
+        key = username.lower()
+        for team in self.invitations.pop(key):
+            self._team(team).add(key)
+        self.members.add(key)
 
     def list_teams(self) -> set[str]:
         return set(self.teams)
@@ -173,36 +187,41 @@ class FakeGithubOrg:
         return set(self._team(team))
 
     def create_team(self, team: str) -> None:
-        if team in self.teams:
-            raise FakeError(f"team {team} already exists")
+        slug = team_slug(team)
+        if slug in self.teams:
+            raise FakeError(f"team {slug} already exists")
         self.calls.append(f"create_team {team}")
-        self.teams[team] = set()
+        self.teams[slug] = set()
 
     def invite_to_org(self, username: str, teams: list[str]) -> None:
-        if username in self.members or username in self.invitations:
+        key = username.lower()
+        if key in self.members or key in self.invitations:
             raise FakeError(f"{username} is already a member or invited")
         for team in teams:
             self._team(team)
         self.calls.append(f"invite_to_org {username} {','.join(teams)}".rstrip())
-        self.invitations[username] = set(teams)
+        self.invitations[key] = set(teams)
 
     def add_to_team(self, team: str, username: str) -> None:
+        key = username.lower()
         members = self._team(team)
         self.calls.append(f"add_to_team {team} {username}")
-        if username in self.members:
-            members.add(username)
+        if key in self.members:
+            members.add(key)
         else:
-            self.invitations.setdefault(username, set()).add(team)
+            self.invitations.setdefault(key, set()).add(team)
 
     def remove_from_team(self, team: str, username: str) -> None:
+        key = username.lower()
         self.calls.append(f"remove_from_team {team} {username}")
-        self._team(team).discard(username)
-        if username in self.invitations:
-            self.invitations[username].discard(team)
+        self._team(team).discard(key)
+        if key in self.invitations:
+            self.invitations[key].discard(team)
 
     def remove_from_org(self, username: str) -> None:
+        key = username.lower()
         self.calls.append(f"remove_from_org {username}")
-        self.members.discard(username)
-        self.invitations.pop(username, None)
+        self.members.discard(key)
+        self.invitations.pop(key, None)
         for members in self.teams.values():
-            members.discard(username)
+            members.discard(key)

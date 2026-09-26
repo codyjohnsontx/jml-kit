@@ -22,7 +22,7 @@ from jml.changes import (
     UnsuspendUser,
     UpdateProfile,
 )
-from jml.fakes import FakeGithubOrg, FakeOktaDirectory
+from jml.fakes import FakeError, FakeGithubOrg, FakeOktaDirectory
 from jml.models import ArchiveFile, PeopleFile, TeamsFile
 from jml.planner import Files, Plan, Unmanaged, plan
 from jml.ports import UserStatus
@@ -416,3 +416,99 @@ def test_apply_then_plan_is_empty(steps, accept_invitations):
             for username in list(org.github.invitations):
                 org.github.accept_invitation(username)
         assert org.plan(step).empty, org.plan(step)
+
+
+def test_duplicate_jml_id_is_refused_naming_every_account():
+    org = Org().converge(files())
+    ana = org.okta.add_user("ana.ruiz@pedalworks.example", "Ana Ruiz", jml_id="ana.ruiz")
+    manager = org.okta.add_user("manager@pedalworks.example", "Manager", jml_id="ana.ruiz")
+    leaver = files({**ANA, "status": "leaver", "end": "2026-09-01"})
+
+    result = org.plan(leaver)
+    assert result.changes == ()
+    assert len(result.refused) == 1
+    for account in (ana, manager):
+        assert f"{account.login} ({account.okta_id})" in result.refused[0]
+    with pytest.raises(PlanRefused):
+        apply(result, org.okta, org.github)
+    assert {user.status for user in org.okta.list_users()} == {UserStatus.ACTIVE}
+
+
+def test_duplicate_jml_id_blocks_a_joiner_too():
+    org = Org().converge(files())
+    org.okta.add_user("someone@pedalworks.example", "Someone", jml_id="ana.ruiz")
+    org.okta.add_user("other@pedalworks.example", "Other", jml_id="ana.ruiz")
+    result = org.plan(files(ANA))
+    assert not [c for c in result.changes if getattr(c, "person", None) == "ana.ruiz"]
+    assert result.refused
+
+
+def test_apply_refuses_a_stale_plan_for_a_duplicate_jml_id():
+    org = Org().converge(files(ANA))
+    stale = org.plan(files({**ANA, "status": "leaver", "end": "2026-09-01"}))
+    assert DeactivateUser("ana.ruiz") in stale.changes
+    org.okta.add_user("manager@pedalworks.example", "Manager", jml_id="ana.ruiz")
+    with pytest.raises(PlanRefused, match="manager@pedalworks.example"):
+        apply(stale, org.okta, org.github)
+    assert org.okta.calls == []
+    assert {user.status for user in org.okta.list_users()} == {UserStatus.ACTIVE}
+
+
+def test_returning_user_loses_stale_access_before_unsuspend():
+    admin_ana = {**ANA, "extra_groups": ["okta-admins"]}
+    org = Org().converge(files(admin_ana))
+    org.apply(files({**admin_ana, "status": "leaver", "end": "2026-11-15"}))
+    result = org.plan(files(ANA))
+    assert result.changes == (
+        RemoveFromGroup("ana.ruiz", "okta-admins"),
+        UnsuspendUser("ana.ruiz"),
+    )
+
+
+def test_failed_access_removal_leaves_a_returning_user_suspended(monkeypatch):
+    admin_ana = {**ANA, "extra_groups": ["okta-admins"]}
+    org = Org().converge(files(admin_ana))
+    org.apply(files({**admin_ana, "status": "leaver", "end": "2026-11-15"}))
+    org.okta.calls.clear()
+
+    def okta_error(group_id: str, user_id: str) -> None:
+        raise RuntimeError("simulated Okta error")
+
+    monkeypatch.setattr(org.okta, "remove_from_group", okta_error)
+    with pytest.raises(RuntimeError):
+        org.apply(files(ANA))
+    assert org.user("ana.ruiz").status == UserStatus.SUSPENDED
+    assert org.okta.calls == []
+
+
+def test_a_group_declared_twice_is_created_once():
+    teams = {**TEAMS, "groups": [*TEAMS["groups"], "engineering"]}
+    result = Org().plan(files(teams=teams))
+    assert [c for c in result.changes if c == CreateGroup("engineering")] == [
+        CreateGroup("engineering")
+    ]
+
+
+def test_github_usernames_are_case_insensitive():
+    org = Org().converge(files())
+    org.github.add_member("CaseUser", "engineering")
+    leaver = files(person("ana.ruiz", github="caseuser", status="leaver", end="2026-09-01"))
+    assert org.apply(leaver).changes == (RemoveFromOrg("ana.ruiz", "caseuser"),)
+    assert org.github.members == set()
+    assert org.github.teams["engineering"] == set()
+    assert org.plan(leaver).empty
+
+
+def test_github_file_handle_in_other_case_converges():
+    org = Org().converge(files(ANA))
+    renamed = files({**ANA, "github": "ARuiz-Demo"})
+    assert org.plan(renamed).empty
+
+
+def test_fake_github_teams_are_addressed_by_slug():
+    github = FakeGithubOrg()
+    github.create_team("Engineering Team")
+    assert github.list_teams() == {"engineering-team"}
+    github.add_to_team("engineering-team", "aruiz-demo")
+    with pytest.raises(FakeError):
+        github.add_to_team("Engineering Team", "aruiz-demo")

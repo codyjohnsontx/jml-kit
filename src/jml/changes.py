@@ -3,8 +3,8 @@
 Changes name things in the kit's terms (jml id, group name, team slug, GitHub username),
 not by Okta ids, so a plan can be computed, rendered and compared before anything exists.
 `ORDER` is the phase apply runs a change in: creates first, then profile and access
-changes with additions before removals, and every removal before a user is suspended,
-deactivated or deleted.
+changes with additions before removals, and every removal before a user is unsuspended,
+suspended, deactivated or deleted.
 """
 
 import re
@@ -73,15 +73,6 @@ class ActivateUser(Change):
 
     def describe(self) -> str:
         return f"{self.person}  activate (no email)"
-
-
-@dataclass(frozen=True)
-class UnsuspendUser(Change):
-    ORDER, SYSTEM, SYMBOL, OBJECT = 22, "okta", "+", "user"
-    person: str
-
-    def describe(self) -> str:
-        return f"{self.person}  unsuspend"
 
 
 # 3. Profile, by partial update.
@@ -169,7 +160,19 @@ class RemoveFromOrg(Change):
         return f"{self.username} ({self.person})  remove from organization"
 
 
-# 6-8. Lock, deprovision, delete.
+# 6. A returning user signs in again only once their access matches the file.
+
+
+@dataclass(frozen=True)
+class UnsuspendUser(Change):
+    ORDER, SYSTEM, SYMBOL, OBJECT = 55, "okta", "+", "user"
+    person: str
+
+    def describe(self) -> str:
+        return f"{self.person}  unsuspend"
+
+
+# 7-9. Lock, deprovision, delete.
 
 
 @dataclass(frozen=True)

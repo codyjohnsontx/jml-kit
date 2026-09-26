@@ -123,6 +123,15 @@ FAIL_CASES = {
         "people.yaml:5: ana.ruiz: email 'ana.ruiz@gmail.com' is not on the company domain"
         " pedalworks.example"
     ),
+    "3-references/fail-duplicate-group": "teams.yaml:1: groups: 'Engineering' is declared twice",
+    "3-references/fail-everyone-group": (
+        "teams.yaml:1: groups: 'Everyone' is Okta's built-in group that every user belongs "
+        "to, so the kit cannot manage it"
+    ),
+    "3-references/fail-github-team-not-slug": (
+        "teams.yaml:5: teams.engineering.github_team: 'Engineering Team' is not a GitHub team "
+        "slug: use lowercase letters, digits and single hyphens, as in the team's URL"
+    ),
     "3-references/fail-undeclared-extra-group": (
         "people.yaml:9: ana.ruiz: extra group 'on-call' is not in the groups list in teams.yaml"
     ),

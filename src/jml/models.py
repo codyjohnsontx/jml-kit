@@ -28,6 +28,8 @@ EMAIL_PATTERN = re.compile(
 # GitHub usernames: letters, digits and single hyphens, no leading or trailing hyphen, 1-39 chars.
 GITHUB_PATTERN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}")
 PROFILE_PATTERN = re.compile(r"[a-z0-9][a-z0-9-]*")
+# GitHub team slugs: GitHub lowercases a team name and turns other characters into hyphens.
+TEAM_SLUG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 ISO_DATE_PATTERN = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
 
@@ -110,6 +112,16 @@ class Team(_Model):
     okta_groups: list[NonEmptyStr]
     github_team: NonEmptyStr | None = None
     mac_profile: str
+
+    @field_validator("github_team")
+    @classmethod
+    def _check_github_team(cls, value: str | None) -> str | None:
+        if value is not None and not TEAM_SLUG_PATTERN.fullmatch(value):
+            raise ValueError(
+                f"{value!r} is not a GitHub team slug: use lowercase letters, digits and "
+                "single hyphens, as in the team's URL"
+            )
+        return value
 
     @field_validator("mac_profile")
     @classmethod

@@ -7,12 +7,15 @@ changes, so running apply and then planning again gives an empty plan.
 Rules:
 
 - A person's Okta user is found by its jmlId profile attribute, never by name or email,
-  so a rename is a profile update rather than a leaver plus a joiner.
+  so a rename is a profile update rather than a leaver plus a joiner. A jmlId on more
+  than one Okta user is refused, naming every account, and nothing is planned for it.
 - Only declared groups (teams.yaml `groups`) and the teams' GitHub teams are managed.
   Anything else live is listed as unmanaged and left alone, except that a user is
   removed from every group before being deactivated.
 - An active person gets their team's groups plus extra_groups, and their team's GitHub
   team when they have a github username. A pending GitHub invitation counts as done.
+- A suspended person set back to active is unsuspended only after their groups and
+  teams match the file, so stale access is gone before they can sign in.
 - A leaver whose end date is in the future is suspended. On or after the end date, they
   are removed from GitHub and every group, then deactivated.
 - A user whose block was removed and who is in people.archive.yaml is deleted, but only
@@ -73,6 +76,7 @@ class Plan:
     unmanaged: tuple[Unmanaged, ...]
     refused: tuple[str, ...]
     drift_checked: bool  # False when there were no base files to tell drift apart
+    base_error: str | None = None  # why the base files could not be used, if they were given
 
     @property
     def empty(self) -> bool:
@@ -149,6 +153,15 @@ def _unique(items: Iterable[str]) -> list[str]:
     return list(dict.fromkeys(items))
 
 
+def ambiguous_jml_id(jml_id: str, users: Iterable[OktaUser]) -> str:
+    accounts = ", ".join(f"{user.login} ({user.okta_id})" for user in users)
+    return (
+        f"{jml_id}: jmlId is set on more than one Okta user ({accounts}), so the kit cannot "
+        "tell which is this person and changes nothing for them; clear jmlId on every "
+        "account but the right one in Okta"
+    )
+
+
 def login_for(person: Person, company: str) -> str:
     return f"{person.id}@{company}.example"
 
@@ -162,10 +175,23 @@ class _Planner:
         self.changes: list[Change] = []
         self.unmanaged: list[Unmanaged] = []
         self.refused: list[str] = []
-        self.users_by_jml_id = {user.jml_id: user for user in live.users if user.jml_id}
+        by_jml_id: dict[str, list[OktaUser]] = {}
+        for user in live.users:
+            if user.jml_id:
+                by_jml_id.setdefault(user.jml_id, []).append(user)
+        # A jmlId on more than one account is ambiguous: acting on either could hit the
+        # wrong person, so nothing is planned for that id until someone fixes Okta.
+        self.ambiguous = {jml_id for jml_id, users in by_jml_id.items() if len(users) > 1}
+        for jml_id in sorted(self.ambiguous):
+            self.refused.append(ambiguous_jml_id(jml_id, by_jml_id[jml_id]))
+        self.users_by_jml_id = {
+            jml_id: users[0] for jml_id, users in by_jml_id.items() if jml_id not in self.ambiguous
+        }
 
         self._plan_groups_and_teams()
         for person in files.people.people:
+            if person.id in self.ambiguous:
+                continue
             self._plan_okta(person)
             if person.github:
                 self._plan_github(person, person.github)
@@ -173,7 +199,7 @@ class _Planner:
         self._plan_unlisted_github()
 
     def _plan_groups_and_teams(self) -> None:
-        for group in self.files.teams.groups:
+        for group in _unique(self.files.teams.groups):
             if group not in self.live.groups:
                 self.changes.append(CreateGroup(group))
         for name in sorted(set(self.live.groups) - set(self.files.teams.groups)):
@@ -281,7 +307,7 @@ class _Planner:
                 self.unmanaged.append(
                     Unmanaged("okta", "user", user.login, "no jmlId, never touched")
                 )
-            elif user.jml_id in listed:
+            elif user.jml_id in listed or user.jml_id in self.ambiguous:
                 continue
             elif user.jml_id in archived:
                 if user.status == UserStatus.DEPROVISIONED:

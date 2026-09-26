@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
+# Okta's built-in group. Every user belongs to it and nobody can leave it.
+EVERYONE = "Everyone"
+
 
 class UserStatus(StrEnum):
     """Okta user statuses the kit acts on. Okta has more (RECOVERY, LOCKED_OUT, ...);

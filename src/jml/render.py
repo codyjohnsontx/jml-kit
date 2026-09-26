@@ -19,6 +19,12 @@ def to_markdown(plan: Plan, source: str | None = None) -> str:
     out = ["## jml plan", ""]
     if source:
         out += [source, ""]
+    if plan.base_error:
+        out += [
+            "Changes already needed before this one could not be shown apart, because "
+            f"{plan.base_error}.",
+            "",
+        ]
     if not plan.changes and not plan.refused:
         out += ["No changes. Okta and GitHub match the file.", ""]
 
@@ -26,7 +32,7 @@ def to_markdown(plan: Plan, source: str | None = None) -> str:
     drift = [change for change in plan.changes if change in plan.drift]
     if changes:
         out += [f"### Changes ({len(changes)})", ""]
-        if not plan.drift_checked:
+        if not plan.drift_checked and not plan.base_error:
             out += [
                 "Includes changes already needed before this one: run with `--base` to "
                 "show them apart.",
@@ -81,6 +87,7 @@ def to_json(plan: Plan) -> str:
             for change in plan.changes
         ],
         "drift_checked": plan.drift_checked,
+        "base_error": plan.base_error,
         "refused": list(plan.refused),
         "unmanaged": [asdict(item) for item in plan.unmanaged],
     }

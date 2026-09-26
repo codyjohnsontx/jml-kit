@@ -18,8 +18,8 @@ from jml.changes import (
     UnsuspendUser,
     UpdateProfile,
 )
-from jml.planner import Plan
-from jml.ports import GithubOrg, OktaDirectory
+from jml.planner import Plan, ambiguous_jml_id
+from jml.ports import GithubOrg, OktaDirectory, OktaUser
 
 
 class PlanRefused(Exception):
@@ -31,7 +31,17 @@ def apply(plan: Plan, okta: OktaDirectory, github: GithubOrg) -> None:
         raise PlanRefused("\n".join(plan.refused))
     # Look users up by jmlId once, and remember users created during this run, because
     # Okta search is eventually consistent and may not find them yet.
-    users = {user.jml_id: user.okta_id for user in okta.list_users() if user.jml_id}
+    by_jml_id: dict[str, list[OktaUser]] = {}
+    for user in okta.list_users():
+        if user.jml_id:
+            by_jml_id.setdefault(user.jml_id, []).append(user)
+    # Check again here, so a stale or hand-built plan cannot act on an ambiguous id.
+    ambiguous = [
+        ambiguous_jml_id(jml_id, found) for jml_id, found in by_jml_id.items() if len(found) > 1
+    ]
+    if ambiguous:
+        raise PlanRefused("\n".join(ambiguous))
+    users = {jml_id: found[0].okta_id for jml_id, found in by_jml_id.items()}
     groups = {group.name: group.okta_id for group in okta.list_groups()}
     for change in plan.changes:
         _execute(change, okta, github, users, groups)

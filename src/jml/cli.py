@@ -2,6 +2,7 @@
 
 import argparse
 import sys
+from dataclasses import replace
 from datetime import date
 from importlib.metadata import version
 from pathlib import Path
@@ -128,28 +129,31 @@ def run_validate(root: Path, base: str | None) -> int:
     return 0
 
 
-def read_base_files(root: Path, base: str, files: Files) -> Files | None:
-    """The files at revision `base`, or None if they do not parse or break a rule the
-    planner relies on. A file missing at `base` means no people yet, or the current team
-    definitions."""
-    try:
-        people_text = read_at_revision(root, base, PEOPLE_FILE)
-        teams_text = read_at_revision(root, base, TEAMS_FILE)
-        people, people_src = (
-            load_text(people_text, PEOPLE_FILE, PeopleFile)
-            if people_text is not None
-            else (files.people.model_copy(update={"people": []}), Source(PEOPLE_FILE, {}))
-        )
-        teams, teams_src = (
-            load_text(teams_text, TEAMS_FILE, TeamsFile)
-            if teams_text is not None
-            else (files.teams, Source(TEAMS_FILE, {}))
-        )
-    except InvalidFile:
-        return None
-    if check_plannable(people, people_src, teams, teams_src):
-        return None
+def read_base_files(root: Path, base: str, files: Files) -> Files:
+    """The files at revision `base`. Raises InvalidFile if they do not parse or break a
+    rule the planner relies on. A file missing at `base` means no people yet, or the
+    current team definitions."""
+    people_text = read_at_revision(root, base, PEOPLE_FILE)
+    teams_text = read_at_revision(root, base, TEAMS_FILE)
+    people, people_src = (
+        load_text(people_text, PEOPLE_FILE, PeopleFile)
+        if people_text is not None
+        else (files.people.model_copy(update={"people": []}), Source(PEOPLE_FILE, {}))
+    )
+    teams, teams_src = (
+        load_text(teams_text, TEAMS_FILE, TeamsFile)
+        if teams_text is not None
+        else (files.teams, Source(TEAMS_FILE, {}))
+    )
+    errors = check_plannable(people, people_src, teams, teams_src)
+    if errors:
+        raise InvalidFile(errors)
     return Files(people, teams, files.archive)
+
+
+def describe_invalid_base(base: str, errors: list[str]) -> str:
+    more = f" and {len(errors) - 1} more problem(s)" if len(errors) > 1 else ""
+    return f"the files at {base} are not valid: {errors[0]}{more}"
 
 
 def run_plan(args: argparse.Namespace, today: date) -> int:
@@ -171,12 +175,15 @@ def run_plan(args: argparse.Namespace, today: date) -> int:
     files = Files(result.people, result.teams, result.archive)
 
     base = None
+    base_error = None
     if args.base:
-        base = read_base_files(root, args.base, files)
-        if base is None:
+        try:
+            base = read_base_files(root, args.base, files)
+        except InvalidFile as exc:
+            base_error = describe_invalid_base(args.base, exc.errors)
             print(
-                f"jml plan: the files at {args.base} are not valid, so changes already "
-                "needed before this change are not shown apart",
+                f"jml plan: {base_error}; changes already needed before this change are "
+                "not shown apart",
                 file=sys.stderr,
             )
     if not args.fake:
@@ -189,6 +196,7 @@ def run_plan(args: argparse.Namespace, today: date) -> int:
     okta, github = demo.fake_org(seed, today)
     drift_base = None if args.base and base is None else seed
     result_plan = plan(files, okta, github, today=today, prune=args.prune, base=drift_base)
+    result_plan = replace(result_plan, base_error=base_error)
     if args.format == "json":
         print(render.to_json(result_plan), end="")
     else:
