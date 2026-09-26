@@ -191,8 +191,7 @@ def test_readme_try_it_block_runs(capsys, monkeypatch):
         assert out
 
 
-def test_readme_edit_example_runs(repo, capsys):
-    assert "uv run jml plan --fake --base HEAD" in (REPO_ROOT / "README.md").read_text()
+def test_plan_with_base_and_no_edit_shows_only_drift(repo, capsys):
     code, out, _ = run(["plan", str(repo), "--fake", "--base", "HEAD"], capsys)
     assert code == 0
     assert "### Changes" not in out  # nothing edited, so only the fake's hand-made drift

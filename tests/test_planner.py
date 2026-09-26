@@ -396,6 +396,11 @@ SCENARIOS = {
     "mover": [files(ANA, SAM), files({**ANA, "team": "design"}, SAM)],
     "rename": [files(ANA), files({**ANA, "name": "Ana R. Ruiz"})],
     "future leaver": [files(ANA), files({**ANA, "status": "leaver", "end": "2026-12-01"})],
+    "leaver brought back": [
+        files(ANA),
+        files({**ANA, "status": "leaver", "end": "2026-12-01"}),
+        files(ANA),
+    ],
     "past leaver": [files(ANA, SAM), files({**ANA, "status": "leaver", "end": "2026-09-01"}, SAM)],
     "delete": [
         files(ANA, SAM),
