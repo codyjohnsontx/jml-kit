@@ -76,9 +76,13 @@ class FakeOktaDirectory:
     def list_groups(self) -> list[OktaGroup]:
         return list(self.groups.values())
 
-    def list_group_members(self, group_id: str) -> set[str]:
-        self._group(group_id)
-        return set(self.members[group_id])
+    def list_user_groups(self, user_id: str) -> list[OktaGroup]:
+        self._user(user_id)
+        return [
+            group
+            for group_id, group in self.groups.items()
+            if user_id in self.members[group_id] and group_id != self._everyone.okta_id
+        ]
 
     def create_group(self, name: str) -> OktaGroup:
         if any(group.name == name for group in self.groups.values()):

@@ -40,14 +40,14 @@ Every problem is reported at once, with the file and person it concerns.
 
 - Changes run in a fixed order: create groups and teams, create and activate users (with no activation email), update profiles, add access, then withdraw it. A mover joins the new team's groups before leaving the old ones.
 - A person's Okta user is found by its `jmlId` attribute, so changing a name or email updates the same user.
-- A leaver whose end date is still ahead is suspended and keeps their groups, in case the date moves. On the end date they are removed from GitHub and every group, then deactivated.
+- A leaver whose end date is still ahead is suspended and keeps their groups, in case the date moves. On the end date they are removed from GitHub and from every Okta group they belong to, declared in `teams.yaml` or not, then deactivated.
 - A deactivated person is deleted only after their block leaves `people.yaml` and they are in `people.archive.yaml`. Okta turns a delete of a user who is not deactivated into a deactivation, so the plan refuses it instead.
-- Drift is live state that someone changed by hand. Given the base revision (`--base`), the plan lists it apart from the change under review, and apply puts it back.
-- Accounts and groups the file does not mention are listed as unmanaged and left alone, such as the owner's super admin user and Okta's Everyone group. `--prune` deactivates only users the kit created (they carry `jmlId`) and removes unlisted members from the kit's GitHub teams, never from the organization.
+- Given the base revision (`--base`), changes the files at that revision need too are listed apart from the change under review, as already needed before this change (`"drift": true` in JSON). The plan cannot tell why: someone changed Okta or GitHub outside this repository, an end date has passed, or an apply has not run yet. Apply makes them match either way.
+- Accounts and groups the file does not mention are listed as unmanaged and left alone, such as the owner's super admin user and Okta's Everyone group. `--prune` deactivates only users the kit created (they carry `jmlId`). GitHub accounts carry no `jmlId`, so a member of the kit's GitHub teams who is not in `people.yaml`, such as an org admin added by hand, is listed as unmanaged and never pruned.
 
 ### Try it
 
-No credentials needed: `--fake` plans against an in-memory Okta and GitHub. The fake starts as if the file had been applied before its newest joiner was added, with the owner's admin user and one hand-made group membership for the plan to report as drift.
+No credentials needed: `--fake` plans against an in-memory Okta and GitHub. The fake starts as if the file had been applied before its newest joiner was added, with the owner's admin user and one hand-made group membership for the plan to show as already needed.
 
 ```sh
 uv sync

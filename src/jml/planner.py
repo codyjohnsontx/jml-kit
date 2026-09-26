@@ -9,17 +9,20 @@ Rules:
 - A person's Okta user is found by its jmlId profile attribute, never by name or email,
   so a rename is a profile update rather than a leaver plus a joiner.
 - Only declared groups (teams.yaml `groups`) and the teams' GitHub teams are managed.
-  Anything else live is listed as unmanaged and left alone.
+  Anything else live is listed as unmanaged and left alone, except that a user is
+  removed from every group before being deactivated.
 - An active person gets their team's groups plus extra_groups, and their team's GitHub
   team when they have a github username. A pending GitHub invitation counts as done.
 - A leaver whose end date is in the future is suspended. On or after the end date, they
-  are removed from GitHub and every managed group, then deactivated.
+  are removed from GitHub and every group, then deactivated.
 - A user whose block was removed and who is in people.archive.yaml is deleted, but only
   once DEPROVISIONED. Otherwise the plan refuses, since Okta would deactivate instead.
 - Users without jmlId are never touched. `prune` deactivates users the kit created that
-  are neither in the file nor archived, and removes unlisted members of managed teams.
+  are neither in the file nor archived. GitHub accounts carry no jmlId, so members of
+  managed teams who are not in the file are listed as unmanaged and never pruned.
 - Given the files at the base revision, a change the base files would also need is drift:
-  live state someone changed outside this repository.
+  it was needed before the change under review, because someone changed live state
+  outside this repository, an end date passed, or an apply has not run.
 """
 
 from collections.abc import Iterable
@@ -82,7 +85,7 @@ class Live:
 
     users: tuple[OktaUser, ...]
     groups: dict[str, str]  # name to Okta id
-    group_members: dict[str, set[str]]  # group name to member Okta ids, for managed groups
+    user_groups: dict[str, set[str]]  # Okta id to group names, for users with a jmlId
     teams: set[str]
     team_members: dict[str, set[str]]  # slug to lowercased usernames, for managed teams
     org_members: set[str]  # lowercased
@@ -90,15 +93,15 @@ class Live:
 
     @classmethod
     def read(cls, files: Files, okta: OktaDirectory, github: GithubOrg) -> "Live":
-        groups = {group.name: group.okta_id for group in okta.list_groups()}
+        users = tuple(okta.list_users())
         teams = github.list_teams()
         return cls(
-            users=tuple(okta.list_users()),
-            groups=groups,
-            group_members={
-                name: okta.list_group_members(groups[name])
-                for name in files.teams.groups
-                if name in groups
+            users=users,
+            groups={group.name: group.okta_id for group in okta.list_groups()},
+            user_groups={
+                user.okta_id: {group.name for group in okta.list_user_groups(user.okta_id)}
+                for user in users
+                if user.jml_id
             },
             teams=teams,
             team_members={
@@ -186,20 +189,22 @@ class _Planner:
         return person.end is not None and person.end <= self.today
 
     def _groups_of(self, user: OktaUser) -> list[str]:
-        return [
-            name
-            for name in self.files.teams.groups
-            if user.okta_id in self.live.group_members.get(name, set())
-        ]
+        """The user's managed groups."""
+        joined = self.live.user_groups.get(user.okta_id, set())
+        return [name for name in self.files.teams.groups if name in joined]
+
+    def _deactivate(self, jml_id: str, user: OktaUser) -> None:
+        """Remove the user from every group, managed or not, then deactivate them."""
+        for group in sorted(self.live.user_groups.get(user.okta_id, set())):
+            self.changes.append(RemoveFromGroup(jml_id, group))
+        self.changes.append(DeactivateUser(jml_id))
 
     def _plan_okta(self, person: Person) -> None:
         user = self.users_by_jml_id.get(person.id)
         leaving = person.status == "leaver"
         if self._gone(person):
             if user and user.status != UserStatus.DEPROVISIONED:
-                for group in self._groups_of(user):
-                    self.changes.append(RemoveFromGroup(person.id, group))
-                self.changes.append(DeactivateUser(person.id))
+                self._deactivate(person.id, user)
             return
 
         wanted = _unique([*self.files.teams.teams[person.team].okta_groups, *person.extra_groups])
@@ -293,9 +298,7 @@ class _Planner:
                     Unmanaged("okta", "user", user.login, "created by jml-kit, deprovisioned")
                 )
             elif self.prune:
-                for group in self._groups_of(user):
-                    self.changes.append(RemoveFromGroup(user.jml_id, group))
-                self.changes.append(DeactivateUser(user.jml_id))
+                self._deactivate(user.jml_id, user)
                 self.unmanaged.append(
                     Unmanaged("okta", "user", user.login, "created by jml-kit, pruned")
                 )
@@ -317,11 +320,6 @@ class _Planner:
             self.unmanaged.append(Unmanaged("github", "invitation", username, "not in people.yaml"))
         for team in _managed_teams(self.files.teams):
             for username in sorted(self.live.team_members.get(team, set()) - listed):
-                if self.prune:
-                    self.changes.append(RemoveFromTeam(None, username, team))
-                    note = "not in people.yaml, pruned"
-                else:
-                    note = "not in people.yaml; --prune removes them from the team"
                 self.unmanaged.append(
-                    Unmanaged("github", "team member", f"{team}/{username}", note)
+                    Unmanaged("github", "team member", f"{team}/{username}", "not in people.yaml")
                 )

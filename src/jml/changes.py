@@ -151,13 +151,12 @@ class AddToTeam(Change):
 @dataclass(frozen=True)
 class RemoveFromTeam(Change):
     ORDER, SYSTEM, SYMBOL, OBJECT = 52, "github", "-", "team"
-    person: str | None  # None for a team member the file does not list
+    person: str
     username: str
     team: str
 
     def describe(self) -> str:
-        who = f"{self.username} ({self.person})" if self.person else self.username
-        return f"{who} -/-> {self.team}"
+        return f"{self.username} ({self.person}) -/-> {self.team}"
 
 
 @dataclass(frozen=True)

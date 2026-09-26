@@ -42,7 +42,7 @@ def test_plan_fake_shows_joiner_drift_and_unmanaged(repo, capsys):
     code, out, _ = run(["plan", str(repo), "--fake"], capsys)
     assert code == 0
     assert "### Changes" in out and "create staged" in out
-    assert "### Drift (1)" in out
+    assert "### Already needed before this change (1)" in out
     assert "### Unmanaged" in out and "no jmlId, never touched" in out
 
 
@@ -111,7 +111,7 @@ def test_plan_with_an_invalid_base_does_not_show_drift_apart(repo, capsys, name,
     code, out, err = run(["plan", str(repo), "--fake", "--base", "HEAD"], capsys)
     assert code == 0
     assert "are not valid" in err
-    assert "### Drift" not in out
+    assert "### Already needed" not in out
     assert "run with `--base` to show it apart" in out
 
 
@@ -149,7 +149,7 @@ def test_markdown_sections_keep_apply_order():
     plan = Plan((create, drift), frozenset({drift}), (unmanaged,), (), drift_checked=True)
     text = to_markdown(plan, "Against a fake.")
     assert text.index("Against a fake.") < text.index("### Changes (1)")
-    assert text.index("### Changes (1)") < text.index("### Drift (1)")
+    assert text.index("### Changes (1)") < text.index("### Already needed before this change")
     assert "- okta group    sam.okafor -/-> okta-admins" in text
     document = json.loads(to_json(plan))
     assert document["changes"][0] == {
@@ -192,4 +192,4 @@ def test_readme_edit_example_runs(repo, capsys):
     code, out, _ = run(["plan", str(repo), "--fake", "--base", "HEAD"], capsys)
     assert code == 0
     assert "### Changes" not in out  # nothing edited, so only the fake's hand-made drift
-    assert "### Drift (1)" in out
+    assert "### Already needed before this change (1)" in out

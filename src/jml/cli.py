@@ -59,8 +59,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="show the changes that make Okta and GitHub match the people file",
         description=(
             "Validate the files, read live state, and print the changes apply would make, "
-            "any drift, and unmanaged accounts. Exits 1 if the files are invalid or the "
-            "plan holds a change the kit refuses to make."
+            "those already needed before this change, and unmanaged accounts. Exits 1 if the "
+            "files are invalid or the plan holds a change the kit refuses to make."
         ),
     )
     plan_parser.add_argument(
@@ -76,7 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "plan against an in-memory Okta and GitHub, needing no credentials. The fake "
             "starts as if the base files were applied (without --base: the file minus its "
-            "newest joiner), plus an unmanaged admin user and one hand-made drift"
+            "newest joiner), plus an unmanaged admin user and one hand-made group membership"
         ),
     )
     plan_parser.add_argument(
@@ -84,15 +84,15 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="REV",
         help=(
             "git revision the change is based on: changes the files at REV would need too "
-            "are shown as drift, and anyone removed since REV must be archived"
+            "are shown apart as already needed, and anyone removed since REV must be archived"
         ),
     )
     plan_parser.add_argument(
         "--prune",
         action="store_true",
         help=(
-            "also deactivate Okta users the kit created that are not in the file, and "
-            "remove unlisted members from managed GitHub teams"
+            "also deactivate Okta users the kit created (they carry jmlId) that are not in "
+            "the file. GitHub accounts carry no jmlId, so they are never pruned"
         ),
     )
     plan_parser.add_argument(

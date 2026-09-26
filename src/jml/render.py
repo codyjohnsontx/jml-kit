@@ -27,14 +27,19 @@ def to_markdown(plan: Plan, source: str | None = None) -> str:
     if changes:
         out += [f"### Changes ({len(changes)})", ""]
         if not plan.drift_checked:
-            out += ["Includes any drift: run with `--base` to show it apart.", ""]
+            out += [
+                "Includes changes already needed before this one: run with `--base` to "
+                "show them apart.",
+                "",
+            ]
         out += _block([_line(change) for change in changes])
     if drift:
         out += [
-            f"### Drift ({len(drift)})",
+            f"### Already needed before this change ({len(drift)})",
             "",
-            "Live state that differs from the file at the base revision too, so it was "
-            "changed outside this repository. Apply puts it back.",
+            "The files at the base revision need these too: someone changed Okta or GitHub "
+            "outside this repository, an end date has passed, or an apply has not run yet. "
+            "Apply makes them match.",
             "",
             *_block([_line(change) for change in drift]),
         ]

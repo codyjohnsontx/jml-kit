@@ -182,6 +182,20 @@ def test_leaver_on_or_after_end_loses_access_then_is_deactivated(end):
     assert "aruiz-demo" not in org.github.members
 
 
+def test_leaver_leaves_groups_the_file_does_not_declare():
+    org = Org().converge(files(ANA, SAM))
+    marketing = org.okta.create_group("marketing")
+    org.okta.add_to_group(marketing.okta_id, org.user("ana.ruiz").okta_id)  # by hand, in Okta
+    assert org.plan(files(ANA, SAM)).changes == ()
+
+    leaver = files({**ANA, "status": "leaver", "end": "2026-09-30"}, SAM)
+    result = org.apply(leaver)
+    assert RemoveFromGroup("ana.ruiz", "marketing") in result.changes
+    assert result.changes[-1] == DeactivateUser("ana.ruiz")
+    assert org.groups_of("ana.ruiz") == {"Everyone"}
+    assert org.plan(leaver).empty
+
+
 def test_leaver_who_was_never_created_is_left_alone():
     result = Org().converge(files()).plan(files({**ANA, "status": "leaver", "end": "2026-11-15"}))
     assert result.changes == ()
@@ -228,6 +242,24 @@ def test_drift_is_told_apart_from_the_change_under_review():
     assert result.drift == {RemoveFromGroup("sam.okafor", "okta-admins")}
     assert AddToGroup("ana.ruiz", "design") in result.changes
     assert RemoveFromGroup("ana.ruiz", "engineering") not in result.drift
+
+
+def test_a_passed_end_date_is_already_needed_at_base():
+    org = Org().converge(files(ANA, SAM))
+    leaver = {**ANA, "status": "leaver", "end": "2026-10-01"}
+    base = files(leaver, SAM)
+    apply(plan(base, org.okta, org.github, today=date(2026, 9, 20)), org.okta, org.github)
+    assert org.user("ana.ruiz").status == UserStatus.SUSPENDED
+
+    result = org.plan(files(leaver, {**SAM, "extra_groups": ["oncall"]}), base=base)
+    assert set(result.changes) - result.drift == {AddToGroup("sam.okafor", "oncall")}
+    assert result.drift == {
+        RemoveFromGroup("ana.ruiz", "all-staff"),
+        RemoveFromGroup("ana.ruiz", "engineering"),
+        RemoveFromGroup("ana.ruiz", "github-users"),
+        RemoveFromOrg("ana.ruiz", "aruiz-demo"),
+        DeactivateUser("ana.ruiz"),
+    }
 
 
 def test_without_base_every_change_is_listed_as_a_change():
@@ -282,8 +314,10 @@ def test_unmanaged_member_of_a_managed_group_is_left_alone():
 def test_prune_touches_only_what_the_kit_created():
     org = Org().converge(files(ANA, SAM))
     seed_unmanaged(org)
-    org.github.members.add("stray")
-    org.github.teams["engineering"].add("stray")
+    marketing = org.okta.group_named("marketing").okta_id
+    org.okta.add_to_group(marketing, org.user("sam.okafor").okta_id)
+    org.github.members.add("org-admin")  # an org admin added to a managed team by hand
+    org.github.teams["engineering"].add("org-admin")
 
     without = org.plan(files(ANA))
     assert without.changes == ()
@@ -298,11 +332,14 @@ def test_prune_touches_only_what_the_kit_created():
     assert pruned.changes == (
         RemoveFromGroup("sam.okafor", "all-staff"),
         RemoveFromGroup("sam.okafor", "design"),
-        RemoveFromTeam(None, "stray", "engineering"),
+        RemoveFromGroup("sam.okafor", "marketing"),
         DeactivateUser("sam.okafor"),
     )
+    team_member = Unmanaged("github", "team member", "engineering/org-admin", "not in people.yaml")
+    assert team_member in set(pruned.unmanaged)
     assert org.user("sam.okafor").status == UserStatus.DEPROVISIONED
-    assert "stray" in org.github.members  # only removed from the managed team
+    assert org.groups_of("sam.okafor") == {"Everyone"}
+    assert "org-admin" in org.github.teams["engineering"]
     assert org.plan(files(ANA), prune=True).changes == ()
 
 

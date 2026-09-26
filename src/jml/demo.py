@@ -3,7 +3,7 @@ credentials.
 
 The fake starts as if apply had already run for the base files and everyone had accepted
 their GitHub invitation. On top of that it holds the owner's own super admin user (no
-jmlId, so unmanaged) and one hand-made change for the plan to report as drift: the first
+jmlId, so unmanaged) and one hand-made change for the plan to show apart: the first
 active person the kit manages is added to a group they lack, an admin group if
 one exists.
 """

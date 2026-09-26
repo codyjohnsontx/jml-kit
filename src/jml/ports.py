@@ -43,8 +43,8 @@ class OktaDirectory(Protocol):
 
     def list_groups(self) -> list[OktaGroup]: ...
 
-    def list_group_members(self, group_id: str) -> set[str]:
-        """Okta ids of the group's members."""
+    def list_user_groups(self, user_id: str) -> list[OktaGroup]:
+        """The user's groups, except Okta's built-in Everyone, which nobody can leave."""
         ...
 
     def create_group(self, name: str) -> OktaGroup: ...
