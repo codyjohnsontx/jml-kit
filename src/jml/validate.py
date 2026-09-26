@@ -210,6 +210,12 @@ def validate(root: Path, base_ids: set[str] | None = None) -> Result:
     return Result(errors, people, teams, archive)
 
 
+def check_plannable(people: PeopleFile, teams: TeamsFile) -> list[str]:
+    """The rules the planner relies on: unique ids, emails and GitHub usernames, and
+    every team and group declared."""
+    return _check_unique(people) + _check_references(people, teams)
+
+
 def _check_unique(people: PeopleFile) -> list[str]:
     errors = []
     for field, normalize in (

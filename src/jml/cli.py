@@ -14,6 +14,7 @@ from jml.validate import (
     TEAMS_FILE,
     BaseRevisionError,
     InvalidFile,
+    check_plannable,
     load_text,
     read_at_revision,
     read_base_people_ids,
@@ -127,8 +128,9 @@ def run_validate(root: Path, base: str | None) -> int:
 
 
 def read_base_files(root: Path, base: str, files: Files) -> Files | None:
-    """The files at revision `base`, or None if they do not parse. A file missing at
-    `base` means no people yet, or the current team definitions."""
+    """The files at revision `base`, or None if they do not parse or break a rule the
+    planner relies on. A file missing at `base` means no people yet, or the current team
+    definitions."""
     try:
         people_text = read_at_revision(root, base, PEOPLE_FILE)
         teams_text = read_at_revision(root, base, TEAMS_FILE)
@@ -141,6 +143,8 @@ def read_base_files(root: Path, base: str, files: Files) -> Files | None:
             load_text(teams_text, TEAMS_FILE, TeamsFile) if teams_text is not None else files.teams
         )
     except InvalidFile:
+        return None
+    if check_plannable(people, teams):
         return None
     return Files(people, teams, files.archive)
 
@@ -168,7 +172,7 @@ def run_plan(args: argparse.Namespace, today: date) -> int:
         base = read_base_files(root, args.base, files)
         if base is None:
             print(
-                f"jml plan: the files at {args.base} do not parse, so drift is not shown apart",
+                f"jml plan: the files at {args.base} are not valid, so drift is not shown apart",
                 file=sys.stderr,
             )
     if not args.fake:
