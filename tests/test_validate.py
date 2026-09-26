@@ -72,6 +72,13 @@ FAIL_CASES = {
         "people.yaml: email 'Ana.Ruiz@Pedalworks.example' is used by both ana.ruiz and ana.r"
     ),
     "2-identity/fail-bad-github": "'ana--ruiz-' is not a valid GitHub username",
+    "2-identity/fail-email-off-domain": (
+        "people.yaml: ana.ruiz: email 'ana.ruiz@gmail.com' is not on the company domain "
+        "pedalworks.example"
+    ),
+    "2-identity/fail-archived-id-reused": (
+        "people.yaml: id 'sam.okafor' is archived in people.archive.yaml and cannot be reused"
+    ),
     "2-identity/fail-duplicate-github": (
         "people.yaml: github 'codyjohnsontx' is used by both ana.ruiz and sam.okafor"
     ),
@@ -90,6 +97,7 @@ FAIL_CASES = {
     "4-dates/fail-end-before-start": "end 2026-11-14 is before start 2026-11-15",
     "4-dates/fail-not-iso": "people[0] (sam.okafor).end: '11/15/2026' is not an ISO date",
     "4-dates/fail-impossible-date": "people[0] (sam.okafor).end: '2026-02-30' is not a real date",
+    "4-dates/fail-missing-start": "people[0] (sam.okafor).start: required key is missing",
     "5-seats/fail-over-limit": (
         "people.yaml: 10 active people, but only 9 Okta seats are available "
         "(10 limit minus 1 reserved)"
@@ -135,10 +143,10 @@ def test_missing_people_file(tmp_path):
     assert validate(tmp_path).errors == ["people.yaml: file not found"]
 
 
-def test_archive_file_is_optional(tmp_path):
+def test_missing_archive_file(tmp_path):
     shutil.copytree(FIXTURES / "base", tmp_path, dirs_exist_ok=True)
     (tmp_path / "people.archive.yaml").unlink()
-    assert validate(tmp_path, base_ids=set()).errors == []
+    assert validate(tmp_path).errors == ["people.archive.yaml: file not found"]
 
 
 def test_repository_sample_data_is_valid():

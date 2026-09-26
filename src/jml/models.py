@@ -15,7 +15,6 @@ from pydantic import (
     ConfigDict,
     Field,
     NonNegativeInt,
-    PositiveInt,
     field_validator,
     model_validator,
 )
@@ -51,7 +50,7 @@ class Person(_Model):
     email: str
     team: str
     status: Literal["active", "leaver"]
-    start: IsoDate | None = None
+    start: IsoDate
     end: IsoDate | None = None
     github: str | None = None
     extra_groups: list[NonEmptyStr] = []
@@ -86,15 +85,14 @@ class Person(_Model):
             raise ValueError("status: leaver requires an end date")
         if self.status == "active" and self.end is not None:
             raise ValueError("status: active must not have an end date")
-        if self.start and self.end and self.end < self.start:
+        if self.end and self.end < self.start:
             raise ValueError(f"end {self.end} is before start {self.start}")
         return self
 
 
 class Seats(_Model):
-    """Okta's Integrator Free Plan allows 10 active users; one is the owner's admin user."""
+    """Seats held back from the Okta limit, such as the owner's admin user."""
 
-    limit: PositiveInt = 10
     reserved: NonNegativeInt = 1
 
 
@@ -130,4 +128,4 @@ class ArchivedPerson(_Model):
 
 
 class ArchiveFile(_Model):
-    archived: list[ArchivedPerson] = []
+    archived: list[ArchivedPerson]

@@ -1,13 +1,13 @@
 company: pedalworks
 people:
-  - {id: person.a1, name: Person A1, email: a1@pedalworks.example, team: engineering, status: active}
-  - {id: person.a2, name: Person A2, email: a2@pedalworks.example, team: engineering, status: active}
-  - {id: person.a3, name: Person A3, email: a3@pedalworks.example, team: engineering, status: active}
-  - {id: person.a4, name: Person A4, email: a4@pedalworks.example, team: engineering, status: active}
-  - {id: person.a5, name: Person A5, email: a5@pedalworks.example, team: engineering, status: active}
-  - {id: person.a6, name: Person A6, email: a6@pedalworks.example, team: engineering, status: active}
-  - {id: person.a7, name: Person A7, email: a7@pedalworks.example, team: engineering, status: active}
-  - {id: person.a8, name: Person A8, email: a8@pedalworks.example, team: engineering, status: active}
-  - {id: person.a9, name: Person A9, email: a9@pedalworks.example, team: engineering, status: active}
-  - {id: person.l1, name: Person L1, email: l1@pedalworks.example, team: design, status: leaver, end: 2026-11-15}
-  - {id: person.l2, name: Person L2, email: l2@pedalworks.example, team: design, status: leaver, end: 2026-11-15}
+  - {id: person.a1, name: Person A1, email: a1@pedalworks.example, team: engineering, status: active, start: 2026-10-01}
+  - {id: person.a2, name: Person A2, email: a2@pedalworks.example, team: engineering, status: active, start: 2026-10-01}
+  - {id: person.a3, name: Person A3, email: a3@pedalworks.example, team: engineering, status: active, start: 2026-10-01}
+  - {id: person.a4, name: Person A4, email: a4@pedalworks.example, team: engineering, status: active, start: 2026-10-01}
+  - {id: person.a5, name: Person A5, email: a5@pedalworks.example, team: engineering, status: active, start: 2026-10-01}
+  - {id: person.a6, name: Person A6, email: a6@pedalworks.example, team: engineering, status: active, start: 2026-10-01}
+  - {id: person.a7, name: Person A7, email: a7@pedalworks.example, team: engineering, status: active, start: 2026-10-01}
+  - {id: person.a8, name: Person A8, email: a8@pedalworks.example, team: engineering, status: active, start: 2026-10-01}
+  - {id: person.a9, name: Person A9, email: a9@pedalworks.example, team: engineering, status: active, start: 2026-10-01}
+  - {id: person.l1, name: Person L1, email: l1@pedalworks.example, team: design, status: leaver, start: 2024-09-02, end: 2026-11-15}
+  - {id: person.l2, name: Person L2, email: l2@pedalworks.example, team: design, status: leaver, start: 2024-09-02, end: 2026-11-15}

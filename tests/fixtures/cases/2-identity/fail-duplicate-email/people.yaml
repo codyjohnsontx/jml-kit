@@ -5,8 +5,10 @@ people:
     email: ana.ruiz@pedalworks.example
     team: engineering
     status: active
+    start: 2026-10-01
   - id: ana.r
     name: Someone
     email: Ana.Ruiz@Pedalworks.example
     team: engineering
     status: active
+    start: 2026-10-01
