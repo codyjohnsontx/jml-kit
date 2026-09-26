@@ -300,10 +300,10 @@ def _check_unique(people: PeopleFile, src: Source) -> list[str]:
             if key in seen:
                 errors.append(
                     f"{src.at('people', index, field)}: {field} {value!r} is used by both "
-                    f"{seen[key]} and {person.id}"
+                    f"{seen[key]} and people[{index}] ({person.id})"
                 )
             else:
-                seen[key] = person.id
+                seen[key] = f"people[{index}] ({person.id}) at {src.at('people', index, field)}"
     return errors
 
 

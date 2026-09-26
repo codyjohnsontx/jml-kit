@@ -100,13 +100,16 @@ FAIL_CASES = {
         "letter"
     ),
     "2-identity/fail-duplicate-email": (
-        "people.yaml:11: email 'Ana.Ruiz@Pedalworks.example' is used by both ana.ruiz and ana.r"
+        "people.yaml:11: email 'Ana.Ruiz@Pedalworks.example' is used by both people[0] "
+        "(ana.ruiz) at people.yaml:5 and people[1] (ana.r)"
     ),
     "2-identity/fail-duplicate-github": (
-        "people.yaml:16: github 'codyjohnsontx' is used by both ana.ruiz and sam.okafor"
+        "people.yaml:16: github 'codyjohnsontx' is used by both people[0] (ana.ruiz) at "
+        "people.yaml:9 and people[1] (sam.okafor)"
     ),
     "2-identity/fail-duplicate-id": (
-        "people.yaml:9: id 'ana.ruiz' is used by both ana.ruiz and ana.ruiz"
+        "people.yaml:9: id 'ana.ruiz' is used by both people[0] (ana.ruiz) at people.yaml:3 "
+        "and people[1] (ana.ruiz)"
     ),
     "2-identity/fail-email-consecutive-dots": (
         "people.yaml:5: people[0] (ana.ruiz).email: 'ana..ruiz@pedalworks.example' is not"
