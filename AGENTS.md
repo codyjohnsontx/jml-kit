@@ -1,0 +1,16 @@
+# Project agent memory
+
+This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
+
+- jml-kit is a public showcase: joiner-mover-leaver automation for the fictional company Pedalworks (emails on `pedalworks.example`), with people as code for Okta and GitHub plus a one-command Mac setup. See `README.md`.
+- Python 3.12, managed with uv. The CLI is the `jml` console script (`src/jml/cli.py`). Project config, lint rules and pytest settings live in `pyproject.toml`; `uv.lock` is committed and CI installs with `uv sync --locked`.
+- The checks CI runs are the steps in `.github/workflows/validate.yml`; run the same `uv run ...` commands locally before pushing.
+- `validate.yml` must stay secret-free with `permissions: contents: read`, because it is the only workflow fork PRs run. Anything needing Okta or GitHub credentials goes in a separate workflow.
+- The CLI uses stdlib `argparse`. Propose any new dependency before adding it.
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.
