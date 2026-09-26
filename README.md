@@ -14,7 +14,7 @@ Work in progress.
 
 ## Development
 
-Requires [uv](https://docs.astral.sh/uv/).
+Requires [uv](https://docs.astral.sh/uv/) at the exact version pinned by `required-version` in [pyproject.toml](pyproject.toml).
 
 ```sh
 uv sync
