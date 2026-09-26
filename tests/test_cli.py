@@ -1,6 +1,7 @@
+from importlib.metadata import version
+
 import pytest
 
-from jml import __version__
 from jml.cli import main
 
 
@@ -15,7 +16,7 @@ def test_version(capsys):
     with pytest.raises(SystemExit) as exc:
         main(["--version"])
     assert exc.value.code == 0
-    assert capsys.readouterr().out.strip() == f"jml {__version__}"
+    assert capsys.readouterr().out.strip() == f"jml {version('jml-kit')}"
 
 
 def test_no_arguments_prints_help(capsys):

@@ -1,8 +1,7 @@
 """Command-line entry point for `jml`."""
 
 import argparse
-
-from jml import __version__
+from importlib.metadata import version
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -10,7 +9,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="jml",
         description="Joiner-mover-leaver automation: people as code for Okta and GitHub.",
     )
-    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {version('jml-kit')}")
     return parser
 
 
