@@ -1,8 +1,8 @@
 """The two ports the planner and apply talk to: an Okta directory and a GitHub organization.
 
 Each port speaks the kit's terms (a person's jml id, a group name, a team slug) and hides
-the SDK behind it. The in-memory fakes in `jml.fakes` implement both; the real adapters
-wrap the Okta SDK and PyGithub.
+the SDK behind it. The in-memory fakes in `jml.fakes` implement both; the real adapters,
+not built yet, will wrap the Okta and GitHub APIs.
 """
 
 from dataclasses import dataclass
