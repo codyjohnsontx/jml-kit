@@ -1,0 +1,26 @@
+# teams.yaml - what each Pedalworks team gets by default.
+#
+# groups declares every Okta group the kit may assign. A team's okta_groups and a
+# person's extra_groups must come from this list, so a typo cannot create a stray group.
+groups:
+  - all-staff
+  - engineering
+  - design
+  - ops
+  - github-users
+  - okta-admins
+  - oncall
+
+teams:
+  engineering:
+    okta_groups: [all-staff, engineering, github-users]
+    github_team: engineering   # team slug in the demo GitHub org; optional
+    mac_profile: engineering   # mac/profiles/engineering.Brewfile
+  design:
+    okta_groups: [all-staff, design]
+    github_team: design
+    mac_profile: design
+  ops:
+    okta_groups: [all-staff, ops, okta-admins]
+    github_team: ops
+    mac_profile: ops

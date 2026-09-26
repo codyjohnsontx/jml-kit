@@ -1,0 +1,9 @@
+groups: [all-staff, engineering, design, oncall]
+teams:
+  engineering:
+    okta_groups: [all-staff, engineering]
+    github_team: engineering
+    mac_profile: engineering
+  design:
+    okta_groups: [all-staff, design]
+    mac_profile: design

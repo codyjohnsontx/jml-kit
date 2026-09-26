@@ -1,0 +1,133 @@
+"""Pydantic models for people.yaml, teams.yaml and people.archive.yaml.
+
+The models check the shape of each file on its own. Rules that span records or files
+(uniqueness, team and group references, seat count, history, Mac profiles) live in
+`jml.validate`.
+"""
+
+import re
+from datetime import date
+from typing import Annotated, Literal
+
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    NonNegativeInt,
+    PositiveInt,
+    field_validator,
+    model_validator,
+)
+
+ID_PATTERN = re.compile(r"^[a-z][a-z0-9.-]{1,38}$")
+EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s.]+$")
+# GitHub usernames: letters, digits and single hyphens, no leading or trailing hyphen, 1-39 chars.
+GITHUB_PATTERN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$")
+PROFILE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _iso_date(value: object) -> date:
+    if isinstance(value, str) and ISO_DATE_PATTERN.match(value):
+        try:
+            return date.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError(f"{value!r} is not a real date") from exc
+    raise ValueError(f"{value!r} is not an ISO date (YYYY-MM-DD)")
+
+
+IsoDate = Annotated[date, BeforeValidator(_iso_date)]
+NonEmptyStr = Annotated[str, Field(min_length=1)]
+
+
+class _Model(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class Person(_Model):
+    id: str
+    name: NonEmptyStr
+    email: str
+    team: str
+    status: Literal["active", "leaver"]
+    start: IsoDate | None = None
+    end: IsoDate | None = None
+    github: str | None = None
+    extra_groups: list[NonEmptyStr] = []
+
+    @field_validator("id")
+    @classmethod
+    def _check_id(cls, value: str) -> str:
+        if not ID_PATTERN.match(value):
+            raise ValueError(
+                f"{value!r} is not a valid id: use 2-39 characters of lowercase letters, "
+                "digits, dots and hyphens, starting with a letter"
+            )
+        return value
+
+    @field_validator("email")
+    @classmethod
+    def _check_email(cls, value: str) -> str:
+        if not EMAIL_PATTERN.match(value):
+            raise ValueError(f"{value!r} is not a valid email address")
+        return value
+
+    @field_validator("github")
+    @classmethod
+    def _check_github(cls, value: str | None) -> str | None:
+        if value is not None and not GITHUB_PATTERN.match(value):
+            raise ValueError(f"{value!r} is not a valid GitHub username")
+        return value
+
+    @model_validator(mode="after")
+    def _check_dates(self) -> "Person":
+        if self.status == "leaver" and self.end is None:
+            raise ValueError("status: leaver requires an end date")
+        if self.status == "active" and self.end is not None:
+            raise ValueError("status: active must not have an end date")
+        if self.start and self.end and self.end < self.start:
+            raise ValueError(f"end {self.end} is before start {self.start}")
+        return self
+
+
+class Seats(_Model):
+    """Okta's Integrator Free Plan allows 10 active users; one is the owner's admin user."""
+
+    limit: PositiveInt = 10
+    reserved: NonNegativeInt = 1
+
+
+class PeopleFile(_Model):
+    company: NonEmptyStr
+    seats: Seats = Seats()
+    people: list[Person]
+
+
+class Team(_Model):
+    okta_groups: list[NonEmptyStr]
+    github_team: NonEmptyStr | None = None
+    mac_profile: str
+
+    @field_validator("mac_profile")
+    @classmethod
+    def _check_profile(cls, value: str) -> str:
+        if not PROFILE_PATTERN.match(value):
+            raise ValueError(
+                f"{value!r} is not a valid profile name: use lowercase letters, digits and hyphens"
+            )
+        return value
+
+
+class TeamsFile(_Model):
+    groups: list[NonEmptyStr]
+    teams: dict[str, Team]
+
+
+class ArchivedPerson(_Model):
+    id: str
+    deactivated_on: IsoDate
+
+
+class ArchiveFile(_Model):
+    archived: list[ArchivedPerson] = []

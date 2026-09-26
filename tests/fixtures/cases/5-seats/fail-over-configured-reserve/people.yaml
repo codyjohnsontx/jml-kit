@@ -1,0 +1,11 @@
+company: pedalworks
+seats: {limit: 10, reserved: 3}
+people:
+  - {id: person.a1, name: Person A1, email: a1@pedalworks.example, team: engineering, status: active}
+  - {id: person.a2, name: Person A2, email: a2@pedalworks.example, team: engineering, status: active}
+  - {id: person.a3, name: Person A3, email: a3@pedalworks.example, team: engineering, status: active}
+  - {id: person.a4, name: Person A4, email: a4@pedalworks.example, team: engineering, status: active}
+  - {id: person.a5, name: Person A5, email: a5@pedalworks.example, team: engineering, status: active}
+  - {id: person.a6, name: Person A6, email: a6@pedalworks.example, team: engineering, status: active}
+  - {id: person.a7, name: Person A7, email: a7@pedalworks.example, team: engineering, status: active}
+  - {id: person.a8, name: Person A8, email: a8@pedalworks.example, team: engineering, status: active}

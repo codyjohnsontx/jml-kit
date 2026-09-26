@@ -1,0 +1,13 @@
+company: pedalworks
+people:
+  - id: ana.ruiz
+    name: Ana Ruiz
+    email: ana.ruiz@pedalworks.example
+    team: engineering
+    status: active
+    start: 2026-10-01
+  - id: sam.okafor
+    name: Sam Okafor
+    email: sam.okafor@pedalworks.example
+    team: design
+    status: active
