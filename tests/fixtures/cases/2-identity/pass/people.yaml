@@ -1,0 +1,16 @@
+company: pedalworks
+people:
+  - id: ana.ruiz-2
+    name: Ana Ruiz
+    email: ana.ruiz@pedalworks.example
+    team: engineering
+    status: active
+    start: 2026-10-01
+    github: pedalworks-bot
+  - id: al
+    name: Al Moreno
+    email: al@pedalworks.example
+    team: design
+    status: active
+    start: 2026-10-01
+    github: a234567890123456789012345678901234567-9

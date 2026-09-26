@@ -1,0 +1,16 @@
+company: pedalworks
+people:
+  - id: ana.ruiz
+    name: Someone
+    email: ana.ruiz@pedalworks.example
+    team: engineering
+    status: active
+    start: 2026-10-01
+    github: CodyJohnsonTX
+  - id: sam.okafor
+    name: Someone
+    email: sam.okafor@pedalworks.example
+    team: engineering
+    status: active
+    start: 2024-09-02
+    github: codyjohnsontx

@@ -1,0 +1,15 @@
+# The email domain follows the company, compared case-insensitively.
+company: spokeshop
+people:
+  - id: ana.ruiz
+    name: Ana Ruiz
+    email: ana.ruiz@spokeshop.example
+    team: engineering
+    status: active
+    start: 2026-10-01
+  - id: sam.okafor
+    name: Sam Okafor
+    email: Sam.Okafor@SpokeShop.Example
+    team: design
+    status: active
+    start: 2024-09-02

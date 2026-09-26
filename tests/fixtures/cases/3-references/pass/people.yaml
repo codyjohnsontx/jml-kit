@@ -1,0 +1,9 @@
+company: pedalworks
+people:
+  - id: ana.ruiz
+    name: Ana Ruiz
+    email: ana.ruiz@pedalworks.example
+    team: design
+    status: active
+    start: 2026-10-01
+    extra_groups: [oncall, engineering]

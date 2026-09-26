@@ -1,0 +1,68 @@
+# people.yaml - the source of truth for who works at Pedalworks and what they can reach.
+# Edit by pull request. `jml validate` checks this file on every PR.
+#
+# id is the identity: lowercase, never reused, and the local part of the Okta login.
+# To offboard someone, set status: leaver with an end date. Remove a block only after
+# the person is listed in people.archive.yaml.
+#
+# github is optional. Only the owner's account and one machine account have one; everyone
+# else is Okta only, because each real person may hold just one free GitHub account.
+company: pedalworks
+
+# Okta's Integrator Free Plan allows 10 active users; jml validate enforces that limit.
+seats:
+  reserved: 1   # the owner's super admin user, which this file does not manage
+
+people:
+  - id: cody.johnson
+    name: Cody Johnson
+    email: cody.johnson@pedalworks.example
+    team: ops
+    status: active
+    start: 2024-03-04
+    github: codyjohnsontx
+    extra_groups: [oncall]
+
+  - id: pedalworks.bot
+    name: Pedalworks Bot
+    email: pedalworks.bot@pedalworks.example
+    team: engineering
+    status: active
+    start: 2026-09-26
+    github: pedalworks-bot
+
+  - id: priya.natarajan
+    name: Priya Natarajan
+    email: priya.natarajan@pedalworks.example
+    team: engineering
+    status: active
+    start: 2024-06-17
+    extra_groups: [oncall]
+
+  - id: jonas.berg
+    name: Jonas Berg
+    email: jonas.berg@pedalworks.example
+    team: engineering
+    status: active
+    start: 2025-01-13
+
+  - id: sam.okafor
+    name: Sam Okafor
+    email: sam.okafor@pedalworks.example
+    team: design
+    status: active
+    start: 2024-09-02
+
+  - id: lena.hoffmann
+    name: Lena Hoffmann
+    email: lena.hoffmann@pedalworks.example
+    team: design
+    status: active
+    start: 2025-05-19
+
+  - id: marcus.reed
+    name: Marcus Reed
+    email: marcus.reed@pedalworks.example
+    team: ops
+    status: active
+    start: 2025-08-11
