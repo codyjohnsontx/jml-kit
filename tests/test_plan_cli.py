@@ -81,7 +81,7 @@ def test_plan_stops_on_invalid_files(repo, capsys):
     (repo / "teams.yaml").write_text("groups: [\n")
     code, out, err = run(["plan", str(repo), "--fake"], capsys)
     assert code == 1 and out == ""
-    assert "teams.yaml: invalid YAML" in err
+    assert "teams.yaml" in err and "invalid YAML" in err
 
 
 def test_plan_rejects_an_unknown_base(repo, capsys):

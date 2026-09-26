@@ -19,16 +19,20 @@ from pydantic import (
     model_validator,
 )
 
-ID_PATTERN = re.compile(r"^[a-z][a-z0-9.-]{1,38}$")
-EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s.]+$")
+ID_PATTERN = re.compile(r"[a-z][a-z0-9.-]{1,38}")
+# Plain ASCII addresses only: dot-separated local part, hostname labels, alphabetic TLD.
+EMAIL_PATTERN = re.compile(
+    r"[A-Za-z0-9_+-]+(?:\.[A-Za-z0-9_+-]+)*"
+    r"@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}"
+)
 # GitHub usernames: letters, digits and single hyphens, no leading or trailing hyphen, 1-39 chars.
-GITHUB_PATTERN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$")
-PROFILE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
-ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+GITHUB_PATTERN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}")
+PROFILE_PATTERN = re.compile(r"[a-z0-9][a-z0-9-]*")
+ISO_DATE_PATTERN = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
 
 def _iso_date(value: object) -> date:
-    if isinstance(value, str) and ISO_DATE_PATTERN.match(value):
+    if isinstance(value, str) and ISO_DATE_PATTERN.fullmatch(value):
         try:
             return date.fromisoformat(value)
         except ValueError as exc:
@@ -58,7 +62,7 @@ class Person(_Model):
     @field_validator("id")
     @classmethod
     def _check_id(cls, value: str) -> str:
-        if not ID_PATTERN.match(value):
+        if not ID_PATTERN.fullmatch(value):
             raise ValueError(
                 f"{value!r} is not a valid id: use 2-39 characters of lowercase letters, "
                 "digits, dots and hyphens, starting with a letter"
@@ -68,14 +72,14 @@ class Person(_Model):
     @field_validator("email")
     @classmethod
     def _check_email(cls, value: str) -> str:
-        if not EMAIL_PATTERN.match(value):
+        if not EMAIL_PATTERN.fullmatch(value):
             raise ValueError(f"{value!r} is not a valid email address")
         return value
 
     @field_validator("github")
     @classmethod
     def _check_github(cls, value: str | None) -> str | None:
-        if value is not None and not GITHUB_PATTERN.match(value):
+        if value is not None and not GITHUB_PATTERN.fullmatch(value):
             raise ValueError(f"{value!r} is not a valid GitHub username")
         return value
 
@@ -110,7 +114,7 @@ class Team(_Model):
     @field_validator("mac_profile")
     @classmethod
     def _check_profile(cls, value: str) -> str:
-        if not PROFILE_PATTERN.match(value):
+        if not PROFILE_PATTERN.fullmatch(value):
             raise ValueError(
                 f"{value!r} is not a valid profile name: use lowercase letters, digits and hyphens"
             )

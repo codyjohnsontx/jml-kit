@@ -14,6 +14,7 @@ from jml.validate import (
     TEAMS_FILE,
     BaseRevisionError,
     InvalidFile,
+    Source,
     check_plannable,
     load_text,
     read_at_revision,
@@ -134,17 +135,19 @@ def read_base_files(root: Path, base: str, files: Files) -> Files | None:
     try:
         people_text = read_at_revision(root, base, PEOPLE_FILE)
         teams_text = read_at_revision(root, base, TEAMS_FILE)
-        people = (
+        people, people_src = (
             load_text(people_text, PEOPLE_FILE, PeopleFile)
             if people_text is not None
-            else files.people.model_copy(update={"people": []})
+            else (files.people.model_copy(update={"people": []}), Source(PEOPLE_FILE, {}))
         )
-        teams = (
-            load_text(teams_text, TEAMS_FILE, TeamsFile) if teams_text is not None else files.teams
+        teams, teams_src = (
+            load_text(teams_text, TEAMS_FILE, TeamsFile)
+            if teams_text is not None
+            else (files.teams, Source(TEAMS_FILE, {}))
         )
     except InvalidFile:
         return None
-    if check_plannable(people, teams):
+    if check_plannable(people, people_src, teams, teams_src):
         return None
     return Files(people, teams, files.archive)
 
