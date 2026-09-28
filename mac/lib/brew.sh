@@ -111,11 +111,13 @@ brew_bundle() {
 
 # --upgrade: fetch new Homebrew metadata and upgrade what the Brewfiles list.
 brew_bundle_upgrade() {
-  local before after
-  step "brew bundle upgrade $*"
+  local before after file names=""
+  for file in "$@"; do
+    names="$names $(basename "$file")"
+  done
+  step "brew bundle upgrade${names}"
   brew update
   before=$(brew_installed)
-  local file
   for file in "$@"; do
     brew_bundle_install "$file" --upgrade
   done

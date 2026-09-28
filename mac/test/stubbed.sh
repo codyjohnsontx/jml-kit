@@ -113,6 +113,9 @@ for pass in "one" "two" "upgrade"; do
     fail "pass $pass does not list the apps left alone before its last line"
   expect_setup_finished
   case "$pass" in
+    upgrade) expect_line "==> brew bundle upgrade base.Brewfile engineering.Brewfile" ;;
+  esac
+  case "$pass" in
     one) expect_changed some ;;
     *) expect_changed 0 ;;
   esac
