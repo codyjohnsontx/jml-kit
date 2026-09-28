@@ -54,6 +54,8 @@ snapshot() {
     defaults_snapshot
     echo "## dotfiles"
     dotfiles_snapshot
+    echo "## ~/.zprofile"
+    cat "$HOME/.zprofile" 2>/dev/null || true
   } >"$1"
 }
 

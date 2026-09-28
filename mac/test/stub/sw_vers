@@ -1,0 +1,7 @@
+#!/bin/bash
+# Fake sw_vers for mac/test/stubbed.sh.
+case "${1:-}" in
+  -productName) echo macOS ;;
+  -productVersion) echo 15.0 ;;
+  *) printf 'ProductName:\tmacOS\nProductVersion:\t15.0\n' ;;
+esac

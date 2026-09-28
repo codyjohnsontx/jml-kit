@@ -32,7 +32,7 @@ jobs:
         with:
           persist-credentials: false
       - run: shellcheck --version
-      - run: shellcheck -x mac/setup.sh mac/lib/*.sh mac/test/*.sh
+      - run: shellcheck -x mac/setup.sh mac/lib/*.sh mac/test/*.sh mac/test/stub/*
 
   idempotence:
     strategy:
@@ -44,6 +44,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      # setup.sh against fake brew and defaults, on the Bash 3.2 that macOS ships: the cases a
+      # real runner cannot stage, such as an app already installed outside Homebrew.
+      - run: mac/test/stubbed.sh
       # Pass one must change something, pass two nothing, with an empty snapshot diff.
       # A third pass checks that --for picks Priya's engineering profile from people.yaml.
       - run: mac/test/idempotent.sh engineering priya.natarajan

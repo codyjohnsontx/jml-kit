@@ -66,13 +66,17 @@ mac/setup.sh engineering          # by profile
 mac/setup.sh --for priya.natarajan  # by person: their team's mac_profile in teams.yaml
 ```
 
-- It installs Homebrew if it is missing, then `mac/profiles/base.Brewfile` (git, gh, jq, yq, 1Password CLI, Rectangle, Slack) and the team's Brewfile: engineering, design or ops.
+- It installs Homebrew if it is missing and has `~/.zprofile` load it in new shells. Then it installs `mac/profiles/base.Brewfile` (git, gh, jq, yq, 1Password CLI, Rectangle, Slack) and the team's Brewfile:
+  - engineering: uv, Node.js, Docker Desktop, Visual Studio Code
+  - design: Figma, ImageOptim
+  - ops: Okta AWS CLI, Terraform (from HashiCorp's tap), Ansible, and uv to run this kit
+- An app that is already in `/Applications`, installed without Homebrew, is left alone and listed at the end, and the run goes on. Any other install failure stops it.
 - It sets a few macOS defaults, such as showing file extensions and not writing `.DS_Store` files to network shares, and links the files in `mac/dotfiles` into the home folder (a global gitignore). A file already in the way is kept as `<name>.pre-jml`.
 - Every step checks before it changes anything, so running it again is safe. The last line reports `changed=N skipped=M`.
 - A normal run never upgrades what is already installed. `mac/setup.sh --upgrade <profile>` does.
 - It is plain Bash 3.2, the version every Mac ships with. `--for` reads the people file with `yq`, installing it first if needed, and only sets up active people.
 
-The [mac workflow](.github/workflows/mac.yml) proves the script is idempotent on GitHub's `macos-15` and `macos-26` runners with `mac/test/idempotent.sh`: the first pass must change something, the second must change nothing and leave an identical snapshot of the installed packages, defaults and links, and `--for` must pick the same profile. The job summary shows the counts. CI skips the GUI apps marked `# ci-skip` in the Brewfiles, so it tests the logic without installing gigabytes of apps. `shellcheck` lints every script.
+The [mac workflow](.github/workflows/mac.yml) proves the script is idempotent on GitHub's `macos-15` and `macos-26` runners with `mac/test/idempotent.sh`: the first pass must change something, the second must change nothing and leave an identical snapshot of the installed packages, defaults and links, and `--for` must pick the same profile. The job summary shows the counts. CI skips the GUI apps marked `# ci-skip` in the Brewfiles, so it tests the logic without installing gigabytes of apps. `mac/test/stubbed.sh` runs the script against a fake `brew` and `defaults` with a temporary home folder, for the cases a runner cannot stage, and is safe to run on any machine. `shellcheck` lints every script.
 
 ## Development
 

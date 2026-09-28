@@ -74,6 +74,7 @@ main() {
   [ "$(uname -s)" = Darwin ] || die "this script sets up macOS"
 
   brew_ensure
+  brew_shell_profile
   if [ -n "$person" ]; then
     brew_ensure_yq
     profile=$(profile_for "$person")
@@ -100,6 +101,10 @@ main() {
   defaults_apply
   dotfiles_link
 
+  if [ -n "$BREW_OUTSIDE_APPS" ]; then
+    step "left alone, already installed outside Homebrew"
+    printf '%s' "$BREW_OUTSIDE_APPS" | sed 's/^/    /'
+  fi
   printf 'changed=%s skipped=%s\n' "$CHANGED" "$SKIPPED"
 }
 

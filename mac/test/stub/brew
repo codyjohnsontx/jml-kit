@@ -1,0 +1,86 @@
+#!/bin/bash
+# Fake brew for mac/test/stubbed.sh. Its state lives in $STUB_STATE:
+#   installed      one "tap|brew|cask <name> <version>" line per installed entry
+#   outside-apps   "<cask> <app>" lines: the app is already in /Applications, not from Homebrew
+#   broken         names whose install fails for some other reason
+# $STUB_BREW_PREFIX is what `brew --prefix` prints.
+
+set -euo pipefail
+
+state=${STUB_STATE:?}
+touch "$state/installed" "$state/outside-apps" "$state/broken"
+
+# The Brewfile's entries as "<type> <name>", less the casks in $HOMEBREW_BUNDLE_CASK_SKIP.
+entries() {
+  local type name
+  sed -nE 's/^[[:space:]]*(tap|brew|cask)[[:space:]]+"([^"]*)".*/\1 \2/p' "$1" |
+    while read -r type name; do
+      case "$type: ${HOMEBREW_BUNDLE_CASK_SKIP:-} " in
+        cask:*" $name "*) ;;
+        *) echo "$type $name" ;;
+      esac
+    done
+}
+
+installed() {
+  awk -v t="$1" -v n="$2" '$1 == t && $2 == n { found = 1 } END { exit !found }' "$state/installed"
+}
+
+brewfile() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in --file=*) echo "${arg#--file=}" ;; esac
+  done
+}
+
+bundle_check() {
+  local type name
+  while read -r type name; do
+    installed "$type" "$name" || exit 1
+  done <<EOF_ENTRIES
+$(entries "$(brewfile "$@")")
+EOF_ENTRIES
+  echo "The Brewfile's dependencies are satisfied."
+}
+
+bundle_install() {
+  local type name app failures=0
+  while read -r type name; do
+    if installed "$type" "$name"; then
+      echo "Using $name"
+      continue
+    fi
+    echo "Installing $name"
+    app=$(awk -v n="$name" '$1 == n { sub(/^[^ ]+ /, ""); print }' "$state/outside-apps")
+    if grep -qxF "$name" "$state/broken"; then
+      echo "Error: Download failed for $name"
+    elif [ "$type" = cask ] && [ -n "$app" ]; then
+      echo "Error: It seems there is already an App at '/Applications/$app'."
+    else
+      echo "$type $name 1.0" >>"$state/installed"
+      continue
+    fi
+    echo "Installing $name has failed!" >&2
+    failures=$((failures + 1))
+  done <<EOF_ENTRIES
+$(entries "$(brewfile "$@")")
+EOF_ENTRIES
+  if [ "$failures" -gt 0 ]; then
+    echo "Homebrew Bundle failed! $failures Brewfile dependencies failed to install." >&2
+    exit 1
+  fi
+  echo "Homebrew Bundle complete!"
+}
+
+case "$*" in
+  --prefix) echo "${STUB_BREW_PREFIX:-/opt/homebrew}" ;;
+  update) ;;
+  "bundle check"*) bundle_check "$@" ;;
+  "bundle install"*) bundle_install "$@" ;;
+  "list --formula --versions") awk '$1 == "brew" { print $2, $3 }' "$state/installed" ;;
+  "list --cask --versions") awk '$1 == "cask" { print $2, $3 }' "$state/installed" ;;
+  *)
+    echo "stub brew: unsupported: brew $*" >&2
+    exit 2
+    ;;
+esac

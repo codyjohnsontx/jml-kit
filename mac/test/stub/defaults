@@ -1,0 +1,40 @@
+#!/bin/bash
+# Fake defaults for mac/test/stubbed.sh: one "<type> <value>" file per key in $STUB_STATE/defaults.
+
+set -euo pipefail
+
+dir="${STUB_STATE:?}/defaults"
+file="$dir/$2 $3"
+
+case "$1" in
+  read-type | read)
+    if [ ! -f "$file" ]; then
+      echo "The domain/default pair of ($2, $3) does not exist" >&2
+      exit 1
+    fi
+    read -r type value <"$file"
+    if [ "$1" = read-type ]; then
+      echo "Type is $type"
+    else
+      echo "$value"
+    fi
+    ;;
+  write)
+    case "$4:$5" in
+      -bool:true) set -- boolean 1 ;;
+      -bool:false) set -- boolean 0 ;;
+      -int:*) set -- integer "$5" ;;
+      -string:*) set -- string "$5" ;;
+      *)
+        echo "stub defaults: unsupported: defaults $*" >&2
+        exit 2
+        ;;
+    esac
+    mkdir -p "$dir"
+    echo "$1 $2" >"$file"
+    ;;
+  *)
+    echo "stub defaults: unsupported: defaults $*" >&2
+    exit 2
+    ;;
+esac
