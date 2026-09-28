@@ -57,6 +57,23 @@ uv run jml plan --fake --format json
 
 To see your own edit planned, change `people.yaml` (move someone to another team, or set `status: leaver` with an `end` date) and run `uv run jml plan --fake --base HEAD`. The fake then starts from the committed file.
 
+## Mac setup
+
+One command sets up a Pedalworks laptop for its owner's team:
+
+```sh
+mac/setup.sh engineering          # by profile
+mac/setup.sh --for priya.natarajan  # by person: their team's mac_profile in teams.yaml
+```
+
+- It installs Homebrew if it is missing, then `mac/profiles/base.Brewfile` (git, gh, jq, yq, 1Password CLI, Rectangle, Slack) and the team's Brewfile: engineering, design or ops.
+- It sets a few macOS defaults, such as showing file extensions and not writing `.DS_Store` files to network shares, and links the files in `mac/dotfiles` into the home folder (a global gitignore). A file already in the way is kept as `<name>.pre-jml`.
+- Every step checks before it changes anything, so running it again is safe. The last line reports `changed=N skipped=M`.
+- A normal run never upgrades what is already installed. `mac/setup.sh --upgrade <profile>` does.
+- It is plain Bash 3.2, the version every Mac ships with. `--for` reads the people file with `yq`, installing it first if needed, and only sets up active people.
+
+The [mac workflow](.github/workflows/mac.yml) proves the script is idempotent on GitHub's `macos-15` and `macos-26` runners with `mac/test/idempotent.sh`: the first pass must change something, the second must change nothing and leave an identical snapshot of the installed packages, defaults and links, and `--for` must pick the same profile. The job summary shows the counts. CI skips the GUI apps marked `# ci-skip` in the Brewfiles, so it tests the logic without installing gigabytes of apps. `shellcheck` lints every script.
+
 ## Development
 
 Requires [uv](https://docs.astral.sh/uv/) at the exact version pinned by `required-version` in [pyproject.toml](pyproject.toml).
