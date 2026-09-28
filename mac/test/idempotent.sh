@@ -35,10 +35,11 @@ fail() {
 
 # Run setup.sh, keep its log, and print the changed= and skipped= numbers.
 pass() {
-  local name=$1
+  local name=$1 status=0
   shift
-  "$MAC/setup.sh" "$@" 2>&1 | tee "$work/$name.log" >&2
+  "$MAC/setup.sh" "$@" 2>&1 | tee "$work/$name.log" >&2 || status=$?
   sed -n 's/^changed=\([0-9]*\) skipped=\([0-9]*\)$/\1 \2/p' "$work/$name.log" | tail -n 1
+  return "$status"
 }
 
 # Everything setup.sh manages, as it is now.

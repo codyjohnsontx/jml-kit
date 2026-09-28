@@ -30,7 +30,7 @@ defaults_current() {
 
 defaults_apply() {
   step "macOS defaults"
-  local domain key type value finder_changed=0
+  local domain key type value any_changed=0
   while read -r domain key type value; do
     if [ "$(defaults_current "$domain" "$key")" = "$(defaults_expected "$type" "$value")" ]; then
       skipped "$domain $key"
@@ -38,13 +38,11 @@ defaults_apply() {
     fi
     defaults write "$domain" "$key" "-$type" "$value"
     changed "$domain $key = $value"
-    if [ "$domain" = com.apple.finder ]; then
-      finder_changed=1
-    fi
+    any_changed=1
   done <<EOF_DEFAULTS
 $JML_DEFAULTS
 EOF_DEFAULTS
-  if [ "$finder_changed" = 1 ]; then
+  if [ "$any_changed" = 1 ]; then
     killall Finder >/dev/null 2>&1 || true
   fi
 }
