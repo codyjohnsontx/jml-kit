@@ -1,0 +1,3 @@
+#!/bin/bash
+# Fake killall for mac/test/stubbed.sh: records what it was asked to restart.
+echo "$*" >>"${STUB_STATE:?}/killall.log"

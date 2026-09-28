@@ -1,0 +1,52 @@
+name: mac
+
+# Proves mac/setup.sh is idempotent on GitHub's macOS runners, and lints every script.
+# macOS runners are free and unlimited only because this repository is public. If it were
+# private, macOS minutes would bill against the plan's allowance at a 10x multiplier.
+
+on:
+  pull_request:
+    paths:
+      - mac/**
+      - people.yaml
+      - teams.yaml
+      - .github/workflows/mac.yml
+  push:
+    branches: [main]
+    paths:
+      - mac/**
+      - people.yaml
+      - teams.yaml
+      - .github/workflows/mac.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    # Linux runner, to keep the macOS concurrency for the idempotence runs.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - run: shellcheck --version
+      - run: shellcheck -x mac/setup.sh mac/lib/*.sh mac/test/*.sh mac/test/stub/*
+
+  idempotence:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-26]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      # setup.sh against fake brew and defaults, on the Bash 3.2 that macOS ships: the cases a
+      # real runner cannot stage, such as an app already installed outside Homebrew.
+      - run: mac/test/stubbed.sh
+      # Pass one must change something, pass two nothing, with an empty snapshot diff.
+      # A third pass checks that --for picks Priya's engineering profile from people.yaml.
+      - run: mac/test/idempotent.sh engineering priya.natarajan

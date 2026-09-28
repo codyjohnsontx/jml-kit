@@ -1,0 +1,6 @@
+#!/bin/bash
+# Fake uname for mac/test/stubbed.sh, so setup.sh runs on any machine as if on a Mac.
+case "${1:-}" in
+  -m) echo arm64 ;;
+  *) echo Darwin ;;
+esac
