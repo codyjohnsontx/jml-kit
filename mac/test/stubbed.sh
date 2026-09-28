@@ -27,9 +27,16 @@ machine() {
   scenario=$1
   HOME="$work/$scenario/home"
   STUB_STATE="$work/$scenario/state"
+  JML_APPDIR="$work/$scenario/Applications"
   STUB_BREW_PREFIX=/opt/homebrew
-  export HOME STUB_STATE STUB_BREW_PREFIX
-  mkdir -p "$HOME" "$STUB_STATE"
+  export HOME STUB_STATE JML_APPDIR STUB_BREW_PREFIX
+  mkdir -p "$HOME" "$STUB_STATE" "$JML_APPDIR"
+}
+
+# An app in $JML_APPDIR that Homebrew did not install, at the given version.
+app_outside_homebrew() {
+  mkdir -p "$JML_APPDIR/$1"
+  echo "$2" >"$JML_APPDIR/$1/version"
 }
 
 # Run setup.sh, keeping its output in $out and its exit status in $status.
@@ -97,8 +104,10 @@ expect_changed 0
 expect_file "$HOME/.zprofile" "export EDITOR=vim
 $intel"
 
+# brew bundle always adopts: a same-version app silently, a different-version one as a failure.
 machine apps-outside-homebrew
-printf 'slack Slack.app\nvisual-studio-code Visual Studio Code.app\n' >"$STUB_STATE/outside-apps"
+app_outside_homebrew Slack.app 1.0
+app_outside_homebrew "Visual Studio Code.app" 0.9
 summary=$(printf '%s\n' "==> left alone, already installed outside Homebrew" \
   "    Slack.app" "    Visual Studio Code.app")
 for pass in "one" "two" "upgrade"; do
@@ -112,6 +121,11 @@ for pass in "one" "two" "upgrade"; do
   [ "$(printf '%s\n' "$out" | tail -n 4 | head -n 3)" = "$summary" ] ||
     fail "pass $pass does not list the apps left alone before its last line"
   expect_setup_finished
+  if grep -qE '^cask (slack|visual-studio-code) ' "$STUB_STATE/installed"; then
+    fail "pass $pass adopted an app installed outside Homebrew"
+  fi
+  expect_file "$JML_APPDIR/Slack.app/version" 1.0
+  expect_file "$JML_APPDIR/Visual Studio Code.app/version" 0.9
   case "$pass" in
     upgrade) expect_line "==> brew bundle upgrade base.Brewfile engineering.Brewfile" ;;
   esac
@@ -129,7 +143,7 @@ expect_line "setup.sh: brew bundle install failed for engineering.Brewfile"
 [ ! -e "$STUB_STATE/defaults" ] || fail "went on to the defaults step"
 
 machine other-failure-beside-app-outside-homebrew
-echo "slack Slack.app" >"$STUB_STATE/outside-apps"
+app_outside_homebrew Slack.app 0.9
 echo gh >"$STUB_STATE/broken"
 run engineering
 expect_status 1 "with a broken formula and an app outside Homebrew"

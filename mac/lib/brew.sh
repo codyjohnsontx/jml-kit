@@ -65,32 +65,43 @@ brew_skip_on_ci() {
   fi
 }
 
-# Apps a cask would install that were already in /Applications, installed some other way.
+# Where casks put their apps. mac/test/stubbed.sh points it at a temp dir.
+JML_APPDIR=${JML_APPDIR:-/Applications}
+
+# Apps a cask would install that were already in $JML_APPDIR, installed some other way.
 BREW_OUTSIDE_APPS=""
 
-# brew bundle install, except that a cask whose app is already in /Applications is left
-# alone and reported. Any other failure stops the run.
-brew_bundle_install() {
-  local file=$1 log apps failed app
-  shift
-  log=$(mktemp)
-  if brew bundle install "$@" --file="$file" 2>&1 | tee "$log"; then
-    rm -f "$log"
-    return
-  fi
-  apps=$(sed -n "s|.*It seems there is already an App at '\(.*\)'\.\$|\1|p" "$log")
-  failed=$(grep -c ' has failed!$' "$log" || true)
-  rm -f "$log"
-  if [ -z "$apps" ] || [ "$(printf '%s\n' "$apps" | wc -l)" -ne "$failed" ]; then
-    die "brew bundle install failed for $(basename "$file")"
-  fi
-  while read -r app; do
-    skipped "already installed outside Homebrew: $(basename "$app")"
-    BREW_OUTSIDE_APPS="$BREW_OUTSIDE_APPS$(basename "$app")
+# brew bundle always installs casks with --adopt, which takes over a hand-installed app of
+# the same version and fails on any other. So skip, and report, every cask in the Brewfile
+# that Homebrew has not installed but whose app is already there.
+brew_skip_outside_apps() {
+  local file=$1 ours cask app
+  ours=" $(brew list --cask --versions | awk '{ print $1 }' | tr '\n' ' ') "
+  while read -r cask; do
+    case "$ours ${HOMEBREW_BUNDLE_CASK_SKIP:-} " in
+      *" $cask "*) continue ;;
+    esac
+    while IFS= read -r app; do
+      if [ -z "$app" ] || [ ! -e "$JML_APPDIR/$app" ]; then
+        continue
+      fi
+      skipped "already installed outside Homebrew: $app"
+      BREW_OUTSIDE_APPS="$BREW_OUTSIDE_APPS$app
 "
-  done <<EOF_APPS
-$apps
+      HOMEBREW_BUNDLE_CASK_SKIP="${HOMEBREW_BUNDLE_CASK_SKIP:-} $cask"
+      export HOMEBREW_BUNDLE_CASK_SKIP
+    done <<EOF_APPS
+$(brew info --cask "$cask" | sed -n 's/ (App)$//p' | sed 's/.* -> //')
 EOF_APPS
+  done <<EOF_CASKS
+$(sed -n 's/^[[:space:]]*cask[[:space:]]*"\([^"]*\)".*/\1/p' "$file")
+EOF_CASKS
+}
+
+brew_bundle_install() {
+  local file=$1
+  shift
+  brew bundle install "$@" --file="$file" || die "brew bundle install failed for $(basename "$file")"
 }
 
 # Install what the Brewfile lists and is missing. Never upgrades what is already there, so
@@ -98,6 +109,7 @@ EOF_APPS
 brew_bundle() {
   local file=$1 before
   step "brew bundle $(basename "$file")"
+  brew_skip_outside_apps "$file"
   if brew bundle check --no-upgrade --file="$file" >/dev/null 2>&1; then
     skipped "$(basename "$file") is satisfied"
     return
@@ -116,6 +128,9 @@ brew_bundle_upgrade() {
     names="$names $(basename "$file")"
   done
   step "brew bundle upgrade${names}"
+  for file in "$@"; do
+    brew_skip_outside_apps "$file"
+  done
   brew update
   before=$(brew_installed)
   for file in "$@"; do
